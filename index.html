@@ -135,6 +135,8 @@
       <button class="reset" id="resetFilters">Reset filters</button>
     </div>
 
+    <div id="diagnostic"></div>
+
     <div class="kpis" id="kpis"></div>
 
     <div class="panel">
@@ -286,10 +288,61 @@ function computeSLA(rows){
   return {total: rows.length, met, pct: rows.length ? met/rows.length*100 : 0};
 }
 
+function renderDiagnostic(){
+  const region = document.getElementById('regionFilter').value.trim();
+  const year = parseInt(document.getElementById('yearFilter').value, 10);
+  const groups = new Set(currentGroupList());
+
+  const regionMatches = RAW.filter(r => r.region === region).length;
+  const yearMatches = RAW.filter(r => r.resolved.getFullYear() === year).length;
+  const groupMatches = RAW.filter(r => groups.has(r.assignmentGroup)).length;
+  const allThree = baseFiltered().length;
+
+  const uniqueRegions = [...new Set(RAW.map(r=>r.region))].sort();
+  const uniqueGroups = [...new Set(RAW.map(r=>r.assignmentGroup))].filter(Boolean).sort();
+  const uniqueYears = [...new Set(RAW.map(r=>r.resolved.getFullYear()))].sort();
+
+  return `
+    <div class="panel" style="border-color:#f2545b;">
+      <h2 style="color:#f2545b;">⚠ No rows matched your filters — diagnostic</h2>
+      <p style="font-size:13px;color:var(--muted);margin-top:-6px;">
+        Region filter ("${region}") matched <b>${regionMatches}</b> rows &nbsp;·&nbsp;
+        Resolved year ${year} matched <b>${yearMatches}</b> rows &nbsp;·&nbsp;
+        Assignment Group list matched <b>${groupMatches}</b> rows &nbsp;·&nbsp;
+        All three combined: <b>${allThree}</b> rows.
+      </p>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:12px;">
+        <div style="flex:1;min-width:220px;">
+          <div style="font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;">Region values found in your file</div>
+          <div style="font-size:12.5px;margin-top:6px;line-height:1.7;">${uniqueRegions.map(r=>`<code>${r}</code>`).join('<br>')}</div>
+        </div>
+        <div style="flex:1;min-width:220px;">
+          <div style="font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;">Resolved years found in your file</div>
+          <div style="font-size:12.5px;margin-top:6px;">${uniqueYears.join(', ')}</div>
+        </div>
+        <div style="flex:2;min-width:280px;">
+          <div style="font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;">Assignment Groups found in your file (first 40)</div>
+          <div style="font-size:12px;margin-top:6px;max-height:160px;overflow:auto;line-height:1.6;">${uniqueGroups.slice(0,40).map(g=>`<code>${g}</code>`).join('<br>')}</div>
+        </div>
+      </div>
+      <p style="font-size:12.5px;color:var(--muted);margin-top:14px;">
+        Fix: open ⚙ Settings above, and update the Region field / assignment group list to exactly match the values shown here (copy-paste to avoid typos/casing differences), then click "Apply &amp; recalculate".
+      </p>
+    </div>
+  `;
+}
+
 function render(){
   const target = parseFloat(document.getElementById('targetPct').value) || 97;
   const data = applyUiFilters(baseFiltered());
   const overall = computeSLA(data);
+
+  const diagHolder = document.getElementById('diagnostic');
+  if(overall.total === 0){
+    diagHolder.innerHTML = renderDiagnostic();
+  } else {
+    diagHolder.innerHTML = '';
+  }
 
   // KPI cards
   const kpis = document.getElementById('kpis');

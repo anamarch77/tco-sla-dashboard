@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TCO SLA Dashboard — NAM</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.3/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
   :root{
     --navy:#0b2545;
@@ -362,6 +362,10 @@ function render(){
 function monthKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 
 function renderTrend(data, target){
+  if(typeof Chart === 'undefined'){
+    document.getElementById('trendChart').outerHTML = '<p style="color:#f2545b;font-size:13px;">Chart library failed to load — check your internet connection and refresh the page.</p>';
+    return;
+  }
   const byMonth = {};
   data.forEach(r=>{
     const k = monthKey(r.resolved);

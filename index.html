@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TCO SLA Dashboard — NAM</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.3/chart.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#0b2545;
+    --navy2:#13315c;
+    --blue:#1e6091;
+    --accent:#f2545b;
+    --green:#2a9d8f;
+    --amber:#e9a23b;
+    --bg:#f5f7fa;
+    --card:#ffffff;
+    --line:#e3e8ef;
+    --text:#1c2b3a;
+    --muted:#6b7c93;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Segoe UI',Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text);}
+  header{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;padding:22px 32px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+  header h1{margin:0;font-size:20px;font-weight:600;letter-spacing:.3px;}
+  header p{margin:2px 0 0;font-size:12.5px;color:#b9c9de;}
+  .target-badge{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);padding:8px 16px;border-radius:20px;font-size:13px;display:flex;align-items:center;gap:8px;}
+  .target-badge input{width:50px;background:transparent;border:none;color:#fff;font-weight:700;font-size:14px;text-align:right;}
+  main{max-width:1280px;margin:0 auto;padding:24px 20px 60px;}
+
+  #dropzone{border:2px dashed #b7c3d4;background:#fff;border-radius:var(--radius);padding:34px;text-align:center;color:var(--muted);cursor:pointer;transition:.15s;margin-bottom:22px;}
+  #dropzone.drag{border-color:var(--blue);background:#eef5fb;color:var(--blue);}
+  #dropzone strong{color:var(--navy);}
+  #fileInput{display:none;}
+  #fileMeta{font-size:12.5px;margin-top:6px;color:var(--muted);}
+
+  .hidden{display:none !important;}
+
+  .filters{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin-bottom:20px;display:flex;gap:20px;flex-wrap:wrap;align-items:flex-end;}
+  .filter-group{display:flex;flex-direction:column;gap:6px;min-width:200px;flex:1;}
+  .filter-group label{font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;}
+  select[multiple]{min-height:92px;border:1px solid var(--line);border-radius:6px;padding:6px;font-size:13px;background:#fbfcfd;}
+  select.single{border:1px solid var(--line);border-radius:6px;padding:8px;font-size:13px;background:#fbfcfd;}
+  .hint{font-size:11px;color:var(--muted);margin-top:2px;}
+  button.reset{background:#eef1f5;border:1px solid var(--line);border-radius:6px;padding:9px 14px;font-size:13px;color:var(--navy);cursor:pointer;height:fit-content;}
+  button.reset:hover{background:#e2e7ee;}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:22px;}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;}
+  .kpi .label{font-size:11.5px;text-transform:uppercase;color:var(--muted);letter-spacing:.5px;font-weight:600;}
+  .kpi .value{font-size:28px;font-weight:700;color:var(--navy);margin-top:4px;}
+  .kpi .sub{font-size:12px;color:var(--muted);margin-top:4px;}
+  .kpi.status-good .value{color:var(--green);}
+  .kpi.status-bad .value{color:var(--accent);}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-bottom:20px;}
+  .panel h2{margin:0 0 14px;font-size:15px;color:var(--navy);font-weight:700;}
+  canvas{max-width:100%;}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line);}
+  th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.4px;cursor:pointer;user-select:none;}
+  tr:hover td{background:#f8fafc;}
+  .pill{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:700;}
+  .pill-good{background:#e2f5f0;color:var(--green);}
+  .pill-bad{background:#fdeaea;color:var(--accent);}
+
+  details.settings{margin-bottom:20px;}
+  details.settings summary{cursor:pointer;font-size:13px;color:var(--blue);font-weight:600;}
+  textarea{width:100%;min-height:90px;font-family:monospace;font-size:12.5px;border:1px solid var(--line);border-radius:6px;padding:10px;margin-top:8px;}
+  .settings-row{display:flex;gap:20px;margin-top:12px;flex-wrap:wrap;}
+  .settings-col{flex:1;min-width:260px;}
+  .settings-col label{font-size:12px;color:var(--muted);font-weight:600;}
+  .apply-btn{margin-top:10px;background:var(--blue);color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:13px;cursor:pointer;}
+
+  footer{text-align:center;color:var(--muted);font-size:11.5px;padding:20px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>TCO SLA Dashboard — NAM Region</h1>
+    <p>Resolved incidents · 2026 · SLA = resolved within 144 business hours (weekends excluded)</p>
+  </div>
+  <div class="target-badge">TARGET SLA <input type="number" id="targetPct" value="97" min="0" max="100" step="0.1">%</div>
+</header>
+
+<main>
+
+  <div id="dropzone">
+    <div><strong>Drop your INCs List export here</strong> (.xlsx), or click to browse.</div>
+    <div id="fileMeta">Expected columns: Region, Assignment Group, Customer, Opened, Resolved, Incident …</div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+  </div>
+
+  <div id="app" class="hidden">
+
+    <details class="settings">
+      <summary>⚙ Settings — TCO NAM assignment groups, region &amp; year filter</summary>
+      <div class="settings-row">
+        <div class="settings-col">
+          <label>TCO NAM assignment groups (one per line — edit to match your list)</label>
+          <textarea id="groupList"></textarea>
+        </div>
+        <div class="settings-col">
+          <label>Region field must equal</label><br>
+          <input id="regionFilter" value="North America" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;margin-top:6px;">
+          <label style="display:block;margin-top:10px;">Resolved year</label>
+          <input id="yearFilter" type="number" value="2026" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;margin-top:6px;">
+        </div>
+      </div>
+      <button class="apply-btn" id="applySettings">Apply &amp; recalculate</button>
+    </details>
+
+    <div class="filters">
+      <div class="filter-group">
+        <label>Customer</label>
+        <select id="customerFilter" multiple></select>
+        <div class="hint">Ctrl/Cmd-click for multiple. Empty = all.</div>
+      </div>
+      <div class="filter-group">
+        <label>Assignment Group</label>
+        <select id="groupFilter" multiple></select>
+        <div class="hint">Ctrl/Cmd-click for multiple. Empty = all.</div>
+      </div>
+      <div class="filter-group" style="max-width:160px;">
+        <label>Month</label>
+        <select id="monthFilter" class="single">
+          <option value="">All months</option>
+        </select>
+      </div>
+      <button class="reset" id="resetFilters">Reset filters</button>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="panel">
+      <h2>Monthly SLA % trend vs target</h2>
+      <canvas id="trendChart" height="90"></canvas>
+    </div>
+
+    <div class="panel">
+      <h2>Weekly backlog volume &amp; resolved SLA%</h2>
+      <canvas id="weeklyChart" height="90"></canvas>
+    </div>
+
+    <div class="panel">
+      <h2>Breakdown by Assignment Group</h2>
+      <table id="groupTable">
+        <thead><tr>
+          <th data-key="group">Assignment Group</th>
+          <th data-key="resolved">Resolved</th>
+          <th data-key="met">Met SLA</th>
+          <th data-key="pct">SLA %</th>
+          <th data-key="status">Status</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+  </div>
+</main>
+
+<footer>Runs entirely in your browser — no data is uploaded to any server.</footer>
+
+<script>
+const DEFAULT_GROUPS = [
+"TCO-Webec-NAM-05","TCO-Webec-NAM-01","TCO-Softpoint-NAM-10","TCO-MWMS-NAM-12",
+"TCO-Scale-NAM-07","TCO-Webec-NAM-04","TCO-Scale-NAM-02","TCO-Scale-NAM-08",
+"TCO-Scale-NAM-11","TCO-Scale-NAM-03","TCO-WebEC-NAM-06","TCO-Scale-NAM-13","TCO-Scale-NAM"
+];
+document.getElementById('groupList').value = DEFAULT_GROUPS.join("\n");
+
+let RAW = [];
+let trendChart, weeklyChart;
+let sortState = {key:'pct', dir:'asc'};
+
+// ---- business-day (NETWORKDAYS-equivalent) calculation ----
+function networkDays(start, end){
+  let d1 = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  let d2 = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  let sign = 1;
+  if(d1 > d2){ const t=d1; d1=d2; d2=t; sign=-1; }
+  const oneDay = 86400000;
+  const totalDays = Math.round((d2 - d1)/oneDay) + 1;
+  const weeks = Math.floor(totalDays/7);
+  let days = weeks*5;
+  const remainder = totalDays % 7;
+  const dow = d1.getDay();
+  for(let i=0;i<remainder;i++){
+    const day = (dow+i) % 7;
+    if(day !== 0 && day !== 6) days++;
+  }
+  return days*sign;
+}
+function slaHours(opened, resolved){ return networkDays(opened, resolved) * 24; }
+
+// ---- file handling ----
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+dropzone.addEventListener('click', ()=>fileInput.click());
+dropzone.addEventListener('dragover', e=>{e.preventDefault(); dropzone.classList.add('drag');});
+dropzone.addEventListener('dragleave', ()=>dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e=>{
+  e.preventDefault(); dropzone.classList.remove('drag');
+  if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e=>{ if(e.target.files.length) handleFile(e.target.files[0]); });
+
+function handleFile(file){
+  document.getElementById('fileMeta').textContent = "Loading " + file.name + " …";
+  const reader = new FileReader();
+  reader.onload = evt => {
+    const wb = XLSX.read(evt.target.result, {type:'array', cellDates:true});
+    const sheetName = wb.SheetNames.includes('Export') ? 'Export' : wb.SheetNames[0];
+    const ws = wb.Sheets[sheetName];
+    const json = XLSX.utils.sheet_to_json(ws, {defval:null});
+    RAW = json.map(r => ({
+      incident: r['Incident'],
+      region: r['Region'],
+      assignmentGroup: r['Assignment Group'],
+      customer: r['Customer'],
+      opened: r['Opened'] instanceof Date ? r['Opened'] : (r['Opened'] ? new Date(r['Opened']) : null),
+      resolved: r['Resolved'] instanceof Date ? r['Resolved'] : (r['Resolved'] ? new Date(r['Resolved']) : null),
+    })).filter(r => r.opened && r.resolved && !isNaN(r.opened) && !isNaN(r.resolved));
+    document.getElementById('fileMeta').textContent = file.name + " — " + RAW.length + " rows loaded.";
+    document.getElementById('app').classList.remove('hidden');
+    buildFilterOptions();
+    render();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function currentGroupList(){
+  return document.getElementById('groupList').value.split("\n").map(s=>s.trim()).filter(Boolean);
+}
+
+function baseFiltered(){
+  const region = document.getElementById('regionFilter').value.trim();
+  const year = parseInt(document.getElementById('yearFilter').value, 10);
+  const groups = new Set(currentGroupList());
+  return RAW.filter(r =>
+    r.region === region &&
+    r.resolved.getFullYear() === year &&
+    groups.has(r.assignmentGroup)
+  );
+}
+
+function buildFilterOptions(){
+  const data = baseFiltered();
+  const customers = [...new Set(data.map(r=>r.customer).filter(Boolean))].sort();
+  const groups = [...new Set(data.map(r=>r.assignmentGroup).filter(Boolean))].sort();
+
+  const cSel = document.getElementById('customerFilter');
+  cSel.innerHTML = customers.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const gSel = document.getElementById('groupFilter');
+  gSel.innerHTML = groups.map(g=>`<option value="${g}">${g}</option>`).join('');
+
+  const mSel = document.getElementById('monthFilter');
+  mSel.innerHTML = '<option value="">All months</option>' +
+    ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    .map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
+}
+
+function selected(id){
+  return [...document.getElementById(id).selectedOptions].map(o=>o.value);
+}
+
+function applyUiFilters(data){
+  const custs = selected('customerFilter');
+  const grps = selected('groupFilter');
+  const month = document.getElementById('monthFilter').value;
+  return data.filter(r=>
+    (custs.length===0 || custs.includes(r.customer)) &&
+    (grps.length===0 || grps.includes(r.assignmentGroup)) &&
+    (month==='' || (r.resolved.getMonth()+1) === parseInt(month,10))
+  );
+}
+
+function computeSLA(rows){
+  let met=0;
+  rows.forEach(r => { if(slaHours(r.opened, r.resolved) < 144) met++; });
+  return {total: rows.length, met, pct: rows.length ? met/rows.length*100 : 0};
+}
+
+function render(){
+  const target = parseFloat(document.getElementById('targetPct').value) || 97;
+  const data = applyUiFilters(baseFiltered());
+  const overall = computeSLA(data);
+
+  // KPI cards
+  const kpis = document.getElementById('kpis');
+  const statusClass = overall.pct >= target ? 'status-good' : 'status-bad';
+  kpis.innerHTML = `
+    <div class="kpi"><div class="label">Resolved Incidents</div><div class="value">${overall.total.toLocaleString()}</div><div class="sub">NAM · 2026 · filtered view</div></div>
+    <div class="kpi"><div class="label">Met SLA (&lt;144 bh)</div><div class="value">${overall.met.toLocaleString()}</div><div class="sub">${(overall.total-overall.met).toLocaleString()} breached</div></div>
+    <div class="kpi ${statusClass}"><div class="label">SLA %</div><div class="value">${overall.pct.toFixed(1)}%</div><div class="sub">Target ${target}% — ${(overall.pct-target>=0?'+':'')+(overall.pct-target).toFixed(1)} pts</div></div>
+    <div class="kpi"><div class="label">Assignment Groups</div><div class="value">${new Set(data.map(r=>r.assignmentGroup)).size}</div><div class="sub">of ${currentGroupList().length} configured</div></div>
+  `;
+
+  renderTrend(data, target);
+  renderWeekly(data);
+  renderTable(data, target);
+}
+
+function monthKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+
+function renderTrend(data, target){
+  const byMonth = {};
+  data.forEach(r=>{
+    const k = monthKey(r.resolved);
+    if(!byMonth[k]) byMonth[k] = [];
+    byMonth[k].push(r);
+  });
+  const keys = Object.keys(byMonth).sort();
+  const labels = keys.map(k=>{
+    const [y,m] = k.split('-');
+    return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(m,10)-1] + " " + y;
+  });
+  const pcts = keys.map(k=>computeSLA(byMonth[k]).pct);
+
+  if(trendChart) trendChart.destroy();
+  trendChart = new Chart(document.getElementById('trendChart'), {
+    type:'line',
+    data:{ labels, datasets:[
+      { label:'SLA %', data: pcts, borderColor:'#1e6091', backgroundColor:'rgba(30,96,145,.1)', tension:.25, fill:true, pointRadius:3 },
+      { label:'Target', data: keys.map(()=>target), borderColor:'#e9a23b', borderDash:[6,4], pointRadius:0 }
+    ]},
+    options:{ responsive:true, scales:{ y:{ min:0, max:100, ticks:{callback:v=>v+'%'} } },
+      plugins:{ legend:{position:'bottom'} } }
+  });
+}
+
+function isoWeekKey(d){
+  const dt = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dayNum = (dt.getDay()+6)%7;
+  dt.setDate(dt.getDate()-dayNum+3);
+  const firstThu = new Date(dt.getFullYear(),0,4);
+  const week = 1 + Math.round(((dt - firstThu)/86400000 - 3 + ((firstThu.getDay()+6)%7))/7);
+  return dt.getFullYear()+'-W'+String(week).padStart(2,'0');
+}
+
+function renderWeekly(data){
+  const byWeek = {};
+  data.forEach(r=>{
+    const k = isoWeekKey(r.resolved);
+    if(!byWeek[k]) byWeek[k]=[];
+    byWeek[k].push(r);
+  });
+  const keys = Object.keys(byWeek).sort();
+  const volumes = keys.map(k=>byWeek[k].length);
+  const pcts = keys.map(k=>computeSLA(byWeek[k]).pct);
+
+  if(weeklyChart) weeklyChart.destroy();
+  weeklyChart = new Chart(document.getElementById('weeklyChart'), {
+    data:{ labels:keys, datasets:[
+      { type:'bar', label:'Resolved Volume', data: volumes, backgroundColor:'rgba(30,96,145,.35)', yAxisID:'y' },
+      { type:'line', label:'SLA %', data: pcts, borderColor:'#f2545b', yAxisID:'y1', tension:.25, pointRadius:2 }
+    ]},
+    options:{ responsive:true,
+      scales:{
+        y:{ position:'left', title:{display:true,text:'Resolved'} },
+        y1:{ position:'right', min:0, max:100, grid:{drawOnChartArea:false}, ticks:{callback:v=>v+'%'}, title:{display:true,text:'SLA %'} }
+      },
+      plugins:{ legend:{position:'bottom'} }
+    }
+  });
+}
+
+function renderTable(data, target){
+  const byGroup = {};
+  data.forEach(r=>{
+    if(!byGroup[r.assignmentGroup]) byGroup[r.assignmentGroup]=[];
+    byGroup[r.assignmentGroup].push(r);
+  });
+  let rows = Object.keys(byGroup).map(g=>{
+    const s = computeSLA(byGroup[g]);
+    return {group:g, resolved:s.total, met:s.met, pct:s.pct, status: s.pct>=target?'On Target':'Below Target'};
+  });
+  rows.sort((a,b)=>{
+    const dir = sortState.dir==='asc'?1:-1;
+    if(a[sortState.key] < b[sortState.key]) return -1*dir;
+    if(a[sortState.key] > b[sortState.key]) return 1*dir;
+    return 0;
+  });
+  const tbody = document.querySelector('#groupTable tbody');
+  tbody.innerHTML = rows.map(r=>`
+    <tr>
+      <td>${r.group}</td>
+      <td>${r.resolved.toLocaleString()}</td>
+      <td>${r.met.toLocaleString()}</td>
+      <td>${r.pct.toFixed(1)}%</td>
+      <td><span class="pill ${r.status==='On Target'?'pill-good':'pill-bad'}">${r.status}</span></td>
+    </tr>
+  `).join('') || '<tr><td colspan="5">No data for current filters.</td></tr>';
+}
+
+document.querySelectorAll('#groupTable th').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const key = th.dataset.key;
+    sortState.dir = (sortState.key===key && sortState.dir==='asc') ? 'desc' : 'asc';
+    sortState.key = key;
+    render();
+  });
+});
+
+['customerFilter','groupFilter','monthFilter','targetPct'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', render);
+});
+document.getElementById('resetFilters').addEventListener('click', ()=>{
+  document.getElementById('customerFilter').selectedIndex = -1;
+  document.getElementById('groupFilter').selectedIndex = -1;
+  document.getElementById('monthFilter').value = '';
+  render();
+});
+document.getElementById('applySettings').addEventListener('click', ()=>{
+  buildFilterOptions();
+  render();
+});
+</script>
+</body>
+</html>

@@ -180,6 +180,29 @@ let RAW = [];
 let trendChart, weeklyChart;
 let sortState = {key:'pct', dir:'asc'};
 
+// ---- robust Excel/JS date parsing ----
+function excelSerialToDate(serial){
+  const utcDays = Math.floor(serial - 25569);
+  const utcValue = utcDays * 86400;
+  const dateInfo = new Date(utcValue * 1000);
+  const fractionalDay = serial - Math.floor(serial) + 0.0000001;
+  let totalSeconds = Math.floor(86400 * fractionalDay);
+  const seconds = totalSeconds % 60;
+  totalSeconds -= seconds;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor(totalSeconds / 60) % 60;
+  return new Date(dateInfo.getUTCFullYear(), dateInfo.getUTCMonth(), dateInfo.getUTCDate(), hours, minutes, seconds);
+}
+function parseDateValue(v){
+  if(v instanceof Date && !isNaN(v)) return v;
+  if(typeof v === 'number' && isFinite(v)) return excelSerialToDate(v);
+  if(typeof v === 'string' && v.trim() !== ''){
+    const d = new Date(v);
+    if(!isNaN(d)) return d;
+  }
+  return null;
+}
+
 // ---- business-day (NETWORKDAYS-equivalent) calculation ----
 function networkDays(start, end){
   let d1 = new Date(start.getFullYear(), start.getMonth(), start.getDate());
@@ -225,8 +248,8 @@ function handleFile(file){
       region: r['Region'],
       assignmentGroup: r['Assignment Group'],
       customer: r['Customer'],
-      opened: r['Opened'] instanceof Date ? r['Opened'] : (r['Opened'] ? new Date(r['Opened']) : null),
-      resolved: r['Resolved'] instanceof Date ? r['Resolved'] : (r['Resolved'] ? new Date(r['Resolved']) : null),
+      opened: parseDateValue(r['Opened']),
+      resolved: parseDateValue(r['Resolved']),
     })).filter(r => r.opened && r.resolved && !isNaN(r.opened) && !isNaN(r.resolved));
     document.getElementById('fileMeta').textContent = file.name + " — " + RAW.length + " rows loaded.";
     document.getElementById('app').classList.remove('hidden');

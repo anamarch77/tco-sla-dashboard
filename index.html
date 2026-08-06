@@ -41,8 +41,7 @@
   .filters{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin-bottom:20px;display:flex;gap:20px;flex-wrap:wrap;align-items:flex-end;}
   .filter-group{display:flex;flex-direction:column;gap:6px;min-width:200px;flex:1;}
   .filter-group label{font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;}
-  select[multiple]{min-height:92px;border:1px solid var(--line);border-radius:6px;padding:6px;font-size:13px;background:#fbfcfd;}
-  select.single{border:1px solid var(--line);border-radius:6px;padding:8px;font-size:13px;background:#fbfcfd;}
+  select.single{border:1px solid var(--line);border-radius:6px;padding:8px;font-size:13px;background:#fbfcfd;width:100%;}
   .hint{font-size:11px;color:var(--muted);margin-top:2px;}
   button.reset{background:#eef1f5;border:1px solid var(--line);border-radius:6px;padding:9px 14px;font-size:13px;color:var(--navy);cursor:pointer;height:fit-content;}
   button.reset:hover{background:#e2e7ee;}
@@ -119,13 +118,11 @@
     <div class="filters">
       <div class="filter-group">
         <label>Customer</label>
-        <select id="customerFilter" multiple></select>
-        <div class="hint">Ctrl/Cmd-click for multiple. Empty = all.</div>
+        <select id="customerFilter" class="single"></select>
       </div>
       <div class="filter-group">
         <label>Assignment Group</label>
-        <select id="groupFilter" multiple></select>
-        <div class="hint">Ctrl/Cmd-click for multiple. Empty = all.</div>
+        <select id="groupFilter" class="single"></select>
       </div>
       <div class="filter-group" style="max-width:160px;">
         <label>Month</label>
@@ -312,9 +309,14 @@ function buildFilterOptions(){
   const groups = [...new Set(data.map(r=>r.assignmentGroup).filter(Boolean))].sort();
 
   const cSel = document.getElementById('customerFilter');
-  cSel.innerHTML = customers.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const prevC = cSel.value;
+  cSel.innerHTML = '<option value="">All Customers</option>' + customers.map(c=>`<option value="${c}">${c}</option>`).join('');
+  if(customers.includes(prevC)) cSel.value = prevC;
+
   const gSel = document.getElementById('groupFilter');
-  gSel.innerHTML = groups.map(g=>`<option value="${g}">${g}</option>`).join('');
+  const prevG = gSel.value;
+  gSel.innerHTML = '<option value="">All Assignment Groups</option>' + groups.map(g=>`<option value="${g}">${g}</option>`).join('');
+  if(groups.includes(prevG)) gSel.value = prevG;
 
   const mSel = document.getElementById('monthFilter');
   mSel.innerHTML = '<option value="">All months</option>' +
@@ -322,17 +324,13 @@ function buildFilterOptions(){
     .map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
 }
 
-function selected(id){
-  return [...document.getElementById(id).selectedOptions].map(o=>o.value);
-}
-
 function applyUiFilters(data){
-  const custs = selected('customerFilter');
-  const grps = selected('groupFilter');
+  const cust = document.getElementById('customerFilter').value;
+  const grp = document.getElementById('groupFilter').value;
   const month = document.getElementById('monthFilter').value;
   return data.filter(r=>
-    (custs.length===0 || custs.includes(r.customer)) &&
-    (grps.length===0 || grps.includes(r.assignmentGroup)) &&
+    (cust==='' || r.customer === cust) &&
+    (grp==='' || r.assignmentGroup === grp) &&
     (month==='' || (r.resolved.getMonth()+1) === parseInt(month,10))
   );
 }
@@ -563,8 +561,8 @@ document.querySelectorAll('#groupTable th').forEach(th=>{
   document.getElementById(id).addEventListener('change', render);
 });
 document.getElementById('resetFilters').addEventListener('click', ()=>{
-  document.getElementById('customerFilter').selectedIndex = -1;
-  document.getElementById('groupFilter').selectedIndex = -1;
+  document.getElementById('customerFilter').value = '';
+  document.getElementById('groupFilter').value = '';
   document.getElementById('monthFilter').value = '';
   render();
 });

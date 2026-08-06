@@ -38,12 +38,14 @@
 
   .hidden{display:none !important;}
 
-  .filters{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin-bottom:20px;display:flex;gap:20px;flex-wrap:wrap;align-items:flex-end;}
-  .filter-group{display:flex;flex-direction:column;gap:6px;min-width:200px;flex:1;}
+  .split-row{display:flex;gap:20px;align-items:stretch;margin-bottom:20px;flex-wrap:wrap;}
+  .filters{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;display:flex;flex-direction:column;gap:16px;flex:0 0 260px;min-width:220px;}
+  .filter-group{display:flex;flex-direction:column;gap:6px;width:100%;}
   .filter-group label{font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;}
+  select[multiple]{border:1px solid var(--line);border-radius:6px;padding:6px;font-size:13px;background:#fbfcfd;width:100%;}
   select.single{border:1px solid var(--line);border-radius:6px;padding:8px;font-size:13px;background:#fbfcfd;width:100%;}
   .hint{font-size:11px;color:var(--muted);margin-top:2px;}
-  button.reset{background:#eef1f5;border:1px solid var(--line);border-radius:6px;padding:9px 14px;font-size:13px;color:var(--navy);cursor:pointer;height:fit-content;}
+  button.reset{background:#eef1f5;border:1px solid var(--line);border-radius:6px;padding:9px 14px;font-size:13px;color:var(--navy);cursor:pointer;height:fit-content;width:100%;}
   button.reset:hover{background:#e2e7ee;}
 
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:22px;}
@@ -115,37 +117,9 @@
       <button class="apply-btn" id="applySettings">Apply &amp; recalculate</button>
     </details>
 
-    <div class="filters">
-      <div class="filter-group">
-        <label>Customer</label>
-        <select id="customerFilter" class="single"></select>
-      </div>
-      <div class="filter-group">
-        <label>Assignment Group</label>
-        <select id="groupFilter" class="single"></select>
-      </div>
-      <div class="filter-group" style="max-width:160px;">
-        <label>Month</label>
-        <select id="monthFilter" class="single">
-          <option value="">All months</option>
-        </select>
-      </div>
-      <button class="reset" id="resetFilters">Reset filters</button>
-    </div>
-
     <div id="diagnostic"></div>
 
     <div class="kpis" id="kpis"></div>
-
-    <div class="panel">
-      <h2>Monthly SLA % trend vs target</h2>
-      <canvas id="trendChart" height="90"></canvas>
-    </div>
-
-    <div class="panel">
-      <h2>Weekly backlog volume &amp; resolved SLA%</h2>
-      <canvas id="weeklyChart" height="90"></canvas>
-    </div>
 
     <div class="panel">
       <h2>Breakdown by Assignment Group</h2>
@@ -161,9 +135,54 @@
       </table>
     </div>
 
+    <div class="split-row">
+      <div class="filters">
+        <div class="filter-group">
+          <label>Customer</label>
+          <select id="customerFilter" multiple size="5"></select>
+          <div class="hint">Ctrl/Cmd-click to select multiple. "All" clears other picks.</div>
+        </div>
+        <div class="filter-group">
+          <label>Assignment Group</label>
+          <select id="groupFilter" multiple size="5"></select>
+          <div class="hint">Ctrl/Cmd-click to select multiple. "All" clears other picks.</div>
+        </div>
+        <div class="filter-group">
+          <label>Month</label>
+          <select id="monthFilter" class="single">
+            <option value="">All months</option>
+          </select>
+        </div>
+        <button class="reset" id="resetFilters">Reset filters</button>
+      </div>
+
+      <div class="panel" style="flex:1;margin-bottom:0;">
+        <h2>Monthly SLA % trend vs target</h2>
+        <canvas id="trendChart" height="90"></canvas>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Weekly backlog volume &amp; resolved SLA%</h2>
+      <canvas id="weeklyChart" height="90"></canvas>
+    </div>
+
     <div class="panel">
       <h2>Op. Category 2 by Assignment Group</h2>
       <p style="font-size:12.5px;color:var(--muted);margin-top:-8px;">Counts all resolved incidents regardless of SLA status. Respects the Month filter above — set it to a specific month to slice by month, or leave on "All months" for the full year.</p>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin:14px 0;">
+        <div class="filter-group" style="flex:1;min-width:220px;">
+          <label>Filter Op. Category 2</label>
+          <select id="catFilterCategory" multiple size="4"></select>
+          <div class="hint">Ctrl/Cmd-click to select multiple. "All" clears other picks.</div>
+        </div>
+        <div class="filter-group" style="flex:1;min-width:220px;">
+          <label>Filter Assignment Group (this table only)</label>
+          <select id="catFilterGroup" multiple size="4"></select>
+          <div class="hint">Ctrl/Cmd-click to select multiple. "All" clears other picks.</div>
+        </div>
+        <button class="reset" id="resetCatFilters" style="width:auto;align-self:flex-start;margin-top:22px;">Reset table filters</button>
+      </div>
       <div style="max-height:480px;overflow:auto;">
         <table id="catTable"></table>
       </div>
@@ -309,14 +328,14 @@ function buildFilterOptions(){
   const groups = [...new Set(data.map(r=>r.assignmentGroup).filter(Boolean))].sort();
 
   const cSel = document.getElementById('customerFilter');
-  const prevC = cSel.value;
+  const prevC = selected('customerFilter');
   cSel.innerHTML = '<option value="">All Customers</option>' + customers.map(c=>`<option value="${c}">${c}</option>`).join('');
-  if(customers.includes(prevC)) cSel.value = prevC;
+  restoreSelection(cSel, prevC, customers);
 
   const gSel = document.getElementById('groupFilter');
-  const prevG = gSel.value;
+  const prevG = selected('groupFilter');
   gSel.innerHTML = '<option value="">All Assignment Groups</option>' + groups.map(g=>`<option value="${g}">${g}</option>`).join('');
-  if(groups.includes(prevG)) gSel.value = prevG;
+  restoreSelection(gSel, prevG, groups);
 
   const mSel = document.getElementById('monthFilter');
   mSel.innerHTML = '<option value="">All months</option>' +
@@ -324,13 +343,50 @@ function buildFilterOptions(){
     .map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
 }
 
+function restoreSelection(sel, prevValues, validValues){
+  const keep = prevValues.filter(v => v==='' || validValues.includes(v));
+  if(keep.length===0){
+    sel.options[0].selected = true; // default to "All"
+  } else {
+    [...sel.options].forEach(o => { o.selected = keep.includes(o.value); });
+  }
+}
+
+function selected(id){
+  return [...document.getElementById(id).selectedOptions].map(o=>o.value);
+}
+
+// "All" is mutually exclusive with specific picks: selecting "All" clears others, selecting a specific one clears "All".
+function wireExclusiveAll(id){
+  const sel = document.getElementById(id);
+  sel.addEventListener('mousedown', e=>{
+    if(e.target.tagName !== 'OPTION') return;
+    const isAll = e.target.value === '';
+    e.preventDefault();
+    if(isAll){
+      [...sel.options].forEach(o => o.selected = (o.value===''));
+    } else {
+      const allOpt = sel.options[0];
+      const wasSelected = e.target.selected;
+      if(e.ctrlKey || e.metaKey || e.shiftKey){
+        e.target.selected = !wasSelected;
+      } else {
+        [...sel.options].forEach(o => o.selected = false);
+        e.target.selected = true;
+      }
+      allOpt.selected = [...sel.options].slice(1).every(o=>!o.selected);
+    }
+    sel.dispatchEvent(new Event('change'));
+  });
+}
+
 function applyUiFilters(data){
-  const cust = document.getElementById('customerFilter').value;
-  const grp = document.getElementById('groupFilter').value;
+  const custs = selected('customerFilter').filter(v=>v!=='');
+  const grps = selected('groupFilter').filter(v=>v!=='');
   const month = document.getElementById('monthFilter').value;
   return data.filter(r=>
-    (cust==='' || r.customer === cust) &&
-    (grp==='' || r.assignmentGroup === grp) &&
+    (custs.length===0 || custs.includes(r.customer)) &&
+    (grps.length===0 || grps.includes(r.assignmentGroup)) &&
     (month==='' || (r.resolved.getMonth()+1) === parseInt(month,10))
   );
 }
@@ -509,14 +565,27 @@ function renderTable(data, target){
   `).join('') || '<tr><td colspan="5">No data for current filters.</td></tr>';
 }
 
+let lastFilteredData = [];
+
 function renderCatTable(data){
+  lastFilteredData = data;
+  buildCatTableFilterOptions(data);
+
+  const catPicks = selected('catFilterCategory').filter(v=>v!=='');
+  const grpPicks = selected('catFilterGroup').filter(v=>v!=='');
+  const localData = data.filter(r =>
+    (catPicks.length===0 || catPicks.includes(r.opCat2 || '(blank)')) &&
+    (grpPicks.length===0 || grpPicks.includes(r.assignmentGroup))
+  );
+
   const groups = currentGroupList();
-  const presentGroups = groups.filter(g => data.some(r => r.assignmentGroup === g));
-  const cols = presentGroups.length ? presentGroups : groups;
+  const presentGroups = groups.filter(g => localData.some(r => r.assignmentGroup === g));
+  let cols = presentGroups.length ? presentGroups : groups;
+  if(grpPicks.length) cols = cols.filter(g => grpPicks.includes(g));
 
   const catTotals = {};
   const grid = {}; // grid[cat][group] = count
-  data.forEach(r=>{
+  localData.forEach(r=>{
     const cat = r.opCat2 || '(blank)';
     if(!grid[cat]) grid[cat] = {};
     grid[cat][r.assignmentGroup] = (grid[cat][r.assignmentGroup] || 0) + 1;
@@ -542,10 +611,25 @@ function renderCatTable(data){
         const colTotal = cats.reduce((sum,cat)=> sum + (grid[cat][g] || 0), 0);
         return `<td>${colTotal.toLocaleString()}</td>`;
       }).join('')}
-      <td>${data.length.toLocaleString()}</td>
+      <td>${localData.length.toLocaleString()}</td>
     </tr>`;
 
   document.getElementById('catTable').innerHTML = thead + `<tbody>${tbody}${totalsRow}</tbody>`;
+}
+
+function buildCatTableFilterOptions(data){
+  const cats = [...new Set(data.map(r => r.opCat2 || '(blank)'))].sort();
+  const groups = currentGroupList().filter(g => data.some(r => r.assignmentGroup === g));
+
+  const catSel = document.getElementById('catFilterCategory');
+  const prevCat = selected('catFilterCategory');
+  catSel.innerHTML = '<option value="">All Categories</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+  restoreSelection(catSel, prevCat, cats);
+
+  const grpSel = document.getElementById('catFilterGroup');
+  const prevGrp = selected('catFilterGroup');
+  grpSel.innerHTML = '<option value="">All Assignment Groups</option>' + groups.map(g=>`<option value="${g}">${g}</option>`).join('');
+  restoreSelection(grpSel, prevGrp, groups);
 }
 
 document.querySelectorAll('#groupTable th').forEach(th=>{
@@ -560,9 +644,20 @@ document.querySelectorAll('#groupTable th').forEach(th=>{
 ['customerFilter','groupFilter','monthFilter','targetPct'].forEach(id=>{
   document.getElementById(id).addEventListener('change', render);
 });
+wireExclusiveAll('customerFilter');
+wireExclusiveAll('groupFilter');
+wireExclusiveAll('catFilterCategory');
+wireExclusiveAll('catFilterGroup');
+document.getElementById('catFilterCategory').addEventListener('change', ()=>renderCatTable(lastFilteredData));
+document.getElementById('catFilterGroup').addEventListener('change', ()=>renderCatTable(lastFilteredData));
+document.getElementById('resetCatFilters').addEventListener('click', ()=>{
+  [...document.getElementById('catFilterCategory').options].forEach(o => o.selected = (o.value===''));
+  [...document.getElementById('catFilterGroup').options].forEach(o => o.selected = (o.value===''));
+  renderCatTable(lastFilteredData);
+});
 document.getElementById('resetFilters').addEventListener('click', ()=>{
-  document.getElementById('customerFilter').value = '';
-  document.getElementById('groupFilter').value = '';
+  [...document.getElementById('customerFilter').options].forEach(o => o.selected = (o.value===''));
+  [...document.getElementById('groupFilter').options].forEach(o => o.selected = (o.value===''));
   document.getElementById('monthFilter').value = '';
   render();
 });

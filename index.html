@@ -60,6 +60,7 @@
   canvas{max-width:100%;}
 
   table{width:100%;border-collapse:collapse;font-size:13px;}
+  #catTable thead th{position:sticky;top:0;background:var(--card);z-index:1;}
   th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line);}
   th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.4px;cursor:pointer;user-select:none;}
   tr:hover td{background:#f8fafc;}
@@ -163,6 +164,14 @@
       </table>
     </div>
 
+    <div class="panel">
+      <h2>Op. Category 2 by Assignment Group</h2>
+      <p style="font-size:12.5px;color:var(--muted);margin-top:-8px;">Counts all resolved incidents regardless of SLA status. Respects the Month filter above — set it to a specific month to slice by month, or leave on "All months" for the full year.</p>
+      <div style="max-height:480px;overflow:auto;">
+        <table id="catTable"></table>
+      </div>
+    </div>
+
   </div>
 </main>
 
@@ -245,6 +254,7 @@ function handleArrayBuffer(arrayBuffer, sourceLabel){
       region: r['Region'],
       assignmentGroup: r['Assignment Group'],
       customer: r['Customer'],
+      opCat2: r['Op. Category 2'],
       opened: parseDateValue(r['Opened']),
       resolved: parseDateValue(r['Resolved']),
     })).filter(r => r.opened && r.resolved && !isNaN(r.opened) && !isNaN(r.resolved));
@@ -402,6 +412,7 @@ function render(){
   renderTrend(data, target);
   renderWeekly(data);
   renderTable(data, target);
+  renderCatTable(data);
 }
 
 function monthKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
@@ -498,6 +509,45 @@ function renderTable(data, target){
       <td><span class="pill ${r.status==='On Target'?'pill-good':'pill-bad'}">${r.status}</span></td>
     </tr>
   `).join('') || '<tr><td colspan="5">No data for current filters.</td></tr>';
+}
+
+function renderCatTable(data){
+  const groups = currentGroupList();
+  const presentGroups = groups.filter(g => data.some(r => r.assignmentGroup === g));
+  const cols = presentGroups.length ? presentGroups : groups;
+
+  const catTotals = {};
+  const grid = {}; // grid[cat][group] = count
+  data.forEach(r=>{
+    const cat = r.opCat2 || '(blank)';
+    if(!grid[cat]) grid[cat] = {};
+    grid[cat][r.assignmentGroup] = (grid[cat][r.assignmentGroup] || 0) + 1;
+    catTotals[cat] = (catTotals[cat] || 0) + 1;
+  });
+
+  const cats = Object.keys(catTotals).sort((a,b) => catTotals[b] - catTotals[a]);
+
+  const thead = `<thead><tr>
+      <th>Op. Category 2</th>
+      ${cols.map(g=>`<th>${g}</th>`).join('')}
+      <th>Total</th>
+    </tr></thead>`;
+
+  const tbody = cats.map(cat=>{
+    const rowCells = cols.map(g => `<td>${(grid[cat][g] || 0).toLocaleString()}</td>`).join('');
+    return `<tr><td>${cat}</td>${rowCells}<td><strong>${catTotals[cat].toLocaleString()}</strong></td></tr>`;
+  }).join('') || `<tr><td colspan="${cols.length+2}">No data for current filters.</td></tr>`;
+
+  const totalsRow = `<tr style="background:#f8fafc;font-weight:700;">
+      <td>Total</td>
+      ${cols.map(g => {
+        const colTotal = cats.reduce((sum,cat)=> sum + (grid[cat][g] || 0), 0);
+        return `<td>${colTotal.toLocaleString()}</td>`;
+      }).join('')}
+      <td>${data.length.toLocaleString()}</td>
+    </tr>`;
+
+  document.getElementById('catTable').innerHTML = thead + `<tbody>${tbody}${totalsRow}</tbody>`;
 }
 
 document.querySelectorAll('#groupTable th').forEach(th=>{

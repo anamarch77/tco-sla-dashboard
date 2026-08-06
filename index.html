@@ -92,7 +92,7 @@
 
   <div id="dropzone">
     <div><strong>Drop your INCs List export here</strong> (.xlsx), or click to browse.</div>
-    <div id="fileMeta">Expected columns: Region, Assignment Group, Customer, Opened, Resolved, Incident …</div>
+    <div id="fileMeta">Looking for shared team data… if none is found, upload your own file below.</div>
     <input type="file" id="fileInput" accept=".xlsx,.xls">
   </div>
 
@@ -235,11 +235,8 @@ dropzone.addEventListener('drop', e=>{
 });
 fileInput.addEventListener('change', e=>{ if(e.target.files.length) handleFile(e.target.files[0]); });
 
-function handleFile(file){
-  document.getElementById('fileMeta').textContent = "Loading " + file.name + " …";
-  const reader = new FileReader();
-  reader.onload = evt => {
-    const wb = XLSX.read(evt.target.result, {type:'array', cellDates:true});
+function handleArrayBuffer(arrayBuffer, sourceLabel){
+    const wb = XLSX.read(arrayBuffer, {type:'array', cellDates:true});
     const sheetName = wb.SheetNames.includes('Export') ? 'Export' : wb.SheetNames[0];
     const ws = wb.Sheets[sheetName];
     const json = XLSX.utils.sheet_to_json(ws, {defval:null});
@@ -251,13 +248,38 @@ function handleFile(file){
       opened: parseDateValue(r['Opened']),
       resolved: parseDateValue(r['Resolved']),
     })).filter(r => r.opened && r.resolved && !isNaN(r.opened) && !isNaN(r.resolved));
-    document.getElementById('fileMeta').textContent = file.name + " — " + RAW.length + " rows loaded.";
+    document.getElementById('fileMeta').textContent = sourceLabel + " — " + RAW.length + " rows loaded.";
     document.getElementById('app').classList.remove('hidden');
     buildFilterOptions();
     render();
-  };
+}
+
+function handleFile(file){
+  document.getElementById('fileMeta').textContent = "Loading " + file.name + " …";
+  const reader = new FileReader();
+  reader.onload = evt => handleArrayBuffer(evt.target.result, file.name);
   reader.readAsArrayBuffer(file);
 }
+
+// ---- try to auto-load a shared data file so teammates see the same data without dropping a file themselves ----
+async function tryAutoLoadSharedData(){
+  const candidates = ['./data.xlsx', './data/data.xlsx'];
+  for(const url of candidates){
+    try{
+      const resp = await fetch(url, {cache:'no-store'});
+      if(resp.ok){
+        const buf = await resp.arrayBuffer();
+        handleArrayBuffer(buf, 'Shared data (' + url + ')');
+        document.getElementById('fileMeta').innerHTML += ' — <a href="#" id="uploadOwnLink">upload your own file instead</a>';
+        document.getElementById('uploadOwnLink').addEventListener('click', e=>{ e.preventDefault(); fileInput.click(); });
+        return true;
+      }
+    }catch(e){ /* ignore, try next / fall back to dropzone */ }
+  }
+  return false;
+}
+tryAutoLoadSharedData();
+
 
 function currentGroupList(){
   return document.getElementById('groupList').value.split("\n").map(s=>s.trim()).filter(Boolean);

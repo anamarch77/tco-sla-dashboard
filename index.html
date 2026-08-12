@@ -152,7 +152,23 @@
     <div id="diagnostic"></div>
 
     <div class="split-row">
-      <div class="kpis kpis-stacked" id="kpis"></div>
+      <div class="left-col" style="display:flex;flex-direction:column;gap:16px;flex:0 0 260px;min-width:220px;">
+        <div class="kpis kpis-stacked" id="kpis"></div>
+
+        <div class="filter-group">
+          <label>Assignment Group</label>
+          <div class="dropdown-check" id="groupFilterDD">
+            <button type="button" class="dropdown-check-btn">All Assignment Groups ▾</button>
+            <div class="dropdown-check-panel hidden"></div>
+          </div>
+        </div>
+        <div class="filter-group">
+          <label>Month</label>
+          <select id="monthFilter" class="single">
+            <option value="">All months</option>
+          </select>
+        </div>
+      </div>
 
       <div class="panel" style="flex:1;margin-bottom:0;">
         <h2>Breakdown by Assignment Group</h2>
@@ -177,19 +193,6 @@
             <button type="button" class="dropdown-check-btn">All Customers ▾</button>
             <div class="dropdown-check-panel hidden"></div>
           </div>
-        </div>
-        <div class="filter-group">
-          <label>Assignment Group</label>
-          <div class="dropdown-check" id="groupFilterDD">
-            <button type="button" class="dropdown-check-btn">All Assignment Groups ▾</button>
-            <div class="dropdown-check-panel hidden"></div>
-          </div>
-        </div>
-        <div class="filter-group">
-          <label>Month</label>
-          <select id="monthFilter" class="single">
-            <option value="">All months</option>
-          </select>
         </div>
         <button class="reset" id="resetFilters">Reset filters</button>
       </div>

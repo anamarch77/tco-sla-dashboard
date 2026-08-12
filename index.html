@@ -99,6 +99,8 @@
   .kpi.clickable{cursor:pointer;transition:box-shadow .15s,transform .15s;}
   .kpi.clickable:hover{box-shadow:0 4px 14px rgba(11,37,69,.12);transform:translateY(-1px);}
   tr.clickable-row{cursor:pointer;}
+  td.clickable-cell{cursor:pointer;}
+  td.clickable-cell:hover{background:var(--info-bg) !important;}
 
   .modal-overlay{position:fixed;inset:0;background:rgba(20,20,20,.55);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
   .modal-overlay.hidden{display:none;}
@@ -108,7 +110,7 @@
   .modal-close{background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;padding:4px 8px;}
   .modal-close:hover{opacity:.7;}
   .modal-body{padding:18px 22px;overflow:auto;}
-  #drillTable thead th{position:sticky;top:0;}
+  #drillBody table thead th{position:sticky;top:0;}
 </style>
 </head>
 <body>
@@ -172,6 +174,7 @@
 
       <div class="panel" style="flex:1;margin-bottom:0;">
         <h2>Breakdown by Assignment Group</h2>
+        <p style="font-size:12px;color:var(--muted);margin:-8px 0 12px;">Click a row for that group's trend, top categories, and customer mix.</p>
         <table id="groupTable">
           <thead><tr>
             <th data-key="group">Assignment Group</th>
@@ -199,6 +202,7 @@
 
       <div class="panel" style="flex:1;margin-bottom:0;">
         <h2>Monthly SLA % trend vs target</h2>
+        <p style="font-size:12px;color:var(--muted);margin:-8px 0 10px;">Click a point to filter the dashboard to that month.</p>
         <canvas id="trendChart" height="90"></canvas>
       </div>
     </div>
@@ -210,7 +214,7 @@
 
     <div class="panel">
       <h2>Op. Category 2 by Assignment Group</h2>
-      <p style="font-size:12.5px;color:var(--muted);margin-top:-8px;">Counts all resolved incidents regardless of SLA status. Respects the Month filter above — set it to a specific month to slice by month, or leave on "All months" for the full year.</p>
+      <p style="font-size:12.5px;color:var(--muted);margin-top:-8px;">Counts all resolved incidents regardless of SLA status. Respects the Month filter above — set it to a specific month to slice by month, or leave on "All months" for the full year. Click any cell to see the tickets behind it.</p>
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin:14px 0;">
         <div class="filter-group" style="flex:1;min-width:220px;">
           <label>Filter Op. Category 2</label>
@@ -242,9 +246,7 @@
       <h2 id="drillTitle">Breached tickets</h2>
       <button id="drillClose" class="modal-close" aria-label="Close">✕</button>
     </div>
-    <div class="modal-body">
-      <table id="drillTable"></table>
-    </div>
+    <div class="modal-body" id="drillBody"></div>
   </div>
 </div>
 
@@ -305,34 +307,122 @@ function networkDays(start, end){
 }
 function slaHours(opened, resolved){ return networkDays(opened, resolved) * 24; }
 
-function openDrillDown(rows, scopeLabel){
-  const breached = rows
-    .map(r => ({...r, overage: slaHours(r.opened, r.resolved) - 144}))
-    .filter(r => r.overage >= 0)
-    .sort((a,b) => b.overage - a.overage);
+function escapeHtml(s){
+  if(s===null || s===undefined) return '';
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 
-  document.getElementById('drillTitle').textContent = `Breached tickets — ${scopeLabel} (${breached.length.toLocaleString()})`;
+// ---- ticket list modal (used by KPI breach clicks, group-detail buttons, and category-cell clicks) ----
+function openTicketModal(rows, scopeLabel, opts){
+  opts = opts || {};
+  const onlyBreached = opts.onlyBreached !== false;
 
+  let list = rows.map(r => {
+    const overage = slaHours(r.opened, r.resolved) - 144;
+    return {...r, overage, breached: overage >= 0};
+  });
+  list = onlyBreached
+    ? list.filter(r=>r.breached).sort((a,b)=>b.overage-a.overage)
+    : list.sort((a,b)=>b.resolved-a.resolved);
+
+  const label = onlyBreached ? 'Breached tickets' : 'All tickets';
+  document.getElementById('drillTitle').textContent = `${label} — ${scopeLabel} (${list.length.toLocaleString()})`;
+
+  const fmt = d => d.toLocaleDateString(undefined, {year:'numeric',month:'short',day:'numeric'});
   const thead = `<thead><tr>
       <th>Incident</th><th>Customer</th><th>Assignment Group</th><th>Op. Category 2</th>
-      <th>Opened</th><th>Resolved</th><th>Business Hrs Over SLA</th>
+      <th>Opened</th><th>Resolved</th><th>${onlyBreached ? 'Business Hrs Over SLA' : 'SLA Status'}</th>
     </tr></thead>`;
-  const fmt = d => d.toLocaleDateString(undefined, {year:'numeric',month:'short',day:'numeric'});
-  const tbody = breached.map(r => `
+  const tbody = list.map(r => `
     <tr>
-      <td>${r.incident || ''}</td>
-      <td>${r.customer || ''}</td>
-      <td>${r.assignmentGroup || ''}</td>
-      <td>${r.opCat2 || ''}</td>
+      <td>${escapeHtml(r.incident)}</td>
+      <td>${escapeHtml(r.customer)}</td>
+      <td>${escapeHtml(r.assignmentGroup)}</td>
+      <td>${escapeHtml(r.opCat2)}</td>
       <td>${fmt(r.opened)}</td>
       <td>${fmt(r.resolved)}</td>
-      <td><strong>+${r.overage}</strong></td>
+      <td>${onlyBreached
+        ? `<strong>+${r.overage}</strong>`
+        : `<span class="pill ${r.breached?'pill-bad':'pill-good'}">${r.breached ? 'Breached (+'+r.overage+'h)' : 'Met SLA'}</span>`}</td>
     </tr>
-  `).join('') || '<tr><td colspan="7">No breached tickets for this selection.</td></tr>';
+  `).join('') || `<tr><td colspan="7">No tickets for this selection.</td></tr>`;
 
-  document.getElementById('drillTable').innerHTML = thead + `<tbody>${tbody}</tbody>`;
+  document.getElementById('drillBody').innerHTML = `<table>${thead}<tbody>${tbody}</tbody></table>`;
   document.getElementById('drillModal').classList.remove('hidden');
 }
+function openDrillDown(rows, scopeLabel){ openTicketModal(rows, scopeLabel, {onlyBreached:true}); }
+
+// ---- group detail modal: trend + top categories + top customers for one assignment group ----
+let groupDetailChart = null;
+function openGroupDetail(group){
+  const scoped = lastFilteredData.filter(r=>r.assignmentGroup===group);
+  const target = parseFloat(document.getElementById('targetPct').value) || 97;
+  const overall = computeSLA(scoped);
+  const statusClass = overall.pct >= target ? 'status-good' : 'status-bad';
+
+  const byMonth = {};
+  scoped.forEach(r=>{
+    const k = monthKey(r.resolved);
+    if(!byMonth[k]) byMonth[k]=[];
+    byMonth[k].push(r);
+  });
+  const monthKeys = Object.keys(byMonth).sort();
+  const monthLabels = monthKeys.map(k=>{
+    const [y,m] = k.split('-');
+    return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(m,10)-1] + ' ' + y;
+  });
+  const monthPcts = monthKeys.map(k=>computeSLA(byMonth[k]).pct);
+
+  const catCounts = {};
+  scoped.forEach(r=>{ const c=r.opCat2 || '(blank)'; catCounts[c]=(catCounts[c]||0)+1; });
+  const topCats = Object.entries(catCounts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+  const custCounts = {};
+  scoped.forEach(r=>{ const c=r.customer || '(blank)'; custCounts[c]=(custCounts[c]||0)+1; });
+  const topCusts = Object.entries(custCounts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+  document.getElementById('drillTitle').textContent = `Group detail — ${group}`;
+  document.getElementById('drillBody').innerHTML = `
+    <div class="kpis" style="margin-bottom:20px;">
+      <div class="kpi"><div class="label">Resolved</div><div class="value">${overall.total.toLocaleString()}</div></div>
+      <div class="kpi"><div class="label">Met SLA</div><div class="value">${overall.met.toLocaleString()}</div></div>
+      <div class="kpi ${statusClass}"><div class="label">SLA %</div><div class="value">${overall.pct.toFixed(1)}%</div><div class="sub">Target ${target}%</div></div>
+    </div>
+    <h3 style="font-size:14px;color:var(--navy);margin:0 0 8px;">Monthly SLA % trend</h3>
+    <canvas id="groupDetailChart" height="80" style="margin-bottom:20px;"></canvas>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:240px;">
+        <h3 style="font-size:14px;color:var(--navy);margin:0 0 8px;">Top Op. Category 2</h3>
+        <table>${topCats.map(([c,n])=>`<tr><td>${escapeHtml(c)}</td><td style="text-align:right;">${n.toLocaleString()}</td></tr>`).join('') || '<tr><td>No data</td></tr>'}</table>
+      </div>
+      <div style="flex:1;min-width:240px;">
+        <h3 style="font-size:14px;color:var(--navy);margin:0 0 8px;">Top Customers</h3>
+        <table>${topCusts.map(([c,n])=>`<tr><td>${escapeHtml(c)}</td><td style="text-align:right;">${n.toLocaleString()}</td></tr>`).join('') || '<tr><td>No data</td></tr>'}</table>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px;">
+      <button class="reset" id="viewBreachedBtn">View breached tickets (${(overall.total-overall.met).toLocaleString()})</button>
+      <button class="reset" id="viewAllTicketsBtn">View all tickets (${overall.total.toLocaleString()})</button>
+    </div>
+  `;
+  document.getElementById('drillModal').classList.remove('hidden');
+
+  if(groupDetailChart) groupDetailChart.destroy();
+  if(typeof Chart !== 'undefined'){
+    groupDetailChart = new Chart(document.getElementById('groupDetailChart'), {
+      type:'line',
+      data:{ labels: monthLabels, datasets:[
+        { label:'SLA %', data: monthPcts, borderColor:'#42B0D5', backgroundColor:'rgba(66,176,213,.12)', tension:.25, fill:true, pointRadius:3 },
+        { label:'Target', data: monthKeys.map(()=>target), borderColor:'#F3870C', borderDash:[6,4], pointRadius:0 }
+      ]},
+      options:{ responsive:true, scales:{ y:{min:0,max:100,ticks:{callback:v=>v+'%'}} }, plugins:{legend:{position:'bottom'}} }
+    });
+  }
+
+  document.getElementById('viewBreachedBtn').addEventListener('click', ()=>openTicketModal(scoped, group, {onlyBreached:true}));
+  document.getElementById('viewAllTicketsBtn').addEventListener('click', ()=>openTicketModal(scoped, group, {onlyBreached:false}));
+}
+
 function closeDrillDown(){
   document.getElementById('drillModal').classList.add('hidden');
 }
@@ -558,7 +648,16 @@ function renderTrend(data, target){
       { label:'Target', data: keys.map(()=>target), borderColor:'#F3870C', borderDash:[6,4], pointRadius:0 }
     ]},
     options:{ responsive:true, scales:{ y:{ min:0, max:100, ticks:{callback:v=>v+'%'} } },
-      plugins:{ legend:{position:'bottom'} } }
+      plugins:{ legend:{position:'bottom'} },
+      onHover:(evt, els)=>{ evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      onClick:(evt, els)=>{
+        if(!els.length) return;
+        const key = keys[els[0].index]; // 'YYYY-MM'
+        const monthNum = parseInt(key.split('-')[1], 10);
+        document.getElementById('monthFilter').value = String(monthNum);
+        render();
+      }
+    }
   });
 }
 
@@ -626,8 +725,7 @@ function renderTable(data, target){
   `).join('') || '<tr><td colspan="5">No data for current filters.</td></tr>';
   tbody.querySelectorAll('tr[data-group]').forEach(tr=>{
     tr.addEventListener('click', ()=>{
-      const g = tr.dataset.group;
-      openDrillDown(lastFilteredData.filter(r=>r.assignmentGroup===g), g);
+      openGroupDetail(tr.dataset.group);
     });
   });
 }
@@ -663,13 +761,17 @@ function renderCatTable(data){
 
   const thead = `<thead><tr>
       <th>Op. Category 2</th>
-      ${cols.map(g=>`<th>${g}</th>`).join('')}
+      ${cols.map(g=>`<th>${escapeHtml(g)}</th>`).join('')}
       <th>Total</th>
     </tr></thead>`;
 
-  const tbody = cats.map(cat=>{
-    const rowCells = cols.map(g => `<td>${(grid[cat][g] || 0).toLocaleString()}</td>`).join('');
-    return `<tr><td>${cat}</td>${rowCells}<td><strong>${catTotals[cat].toLocaleString()}</strong></td></tr>`;
+  const tbody = cats.map((cat,catIdx)=>{
+    const rowCells = cols.map((g,colIdx) => {
+      const count = grid[cat][g] || 0;
+      const cls = count>0 ? 'clickable-cell' : '';
+      return `<td class="${cls}" data-cat-idx="${catIdx}" data-col-idx="${colIdx}">${count.toLocaleString()}</td>`;
+    }).join('');
+    return `<tr><td>${escapeHtml(cat)}</td>${rowCells}<td><strong>${catTotals[cat].toLocaleString()}</strong></td></tr>`;
   }).join('') || `<tr><td colspan="${cols.length+2}">No data for current filters.</td></tr>`;
 
   const totalsRow = `<tr style="background:var(--info-bg);font-weight:700;">
@@ -682,6 +784,15 @@ function renderCatTable(data){
     </tr>`;
 
   document.getElementById('catTable').innerHTML = thead + `<tbody>${tbody}${totalsRow}</tbody>`;
+
+  document.querySelectorAll('#catTable td.clickable-cell').forEach(td=>{
+    td.addEventListener('click', ()=>{
+      const cat = cats[parseInt(td.dataset.catIdx,10)];
+      const g = cols[parseInt(td.dataset.colIdx,10)];
+      const rows = localData.filter(r => (r.opCat2||'(blank)')===cat && r.assignmentGroup===g);
+      openTicketModal(rows, `${cat} — ${g}`, {onlyBreached:false});
+    });
+  });
 }
 
 function buildCatTableFilterOptions(data){

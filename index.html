@@ -8,30 +8,34 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
   :root{
-    --navy:#0b2545;
-    --navy2:#13315c;
-    --blue:#1e6091;
-    --accent:#f2545b;
-    --green:#2a9d8f;
-    --amber:#e9a23b;
-    --bg:#f5f7fa;
+    --navy:#003E62;      /* Maersk dark-blue */
+    --navy2:#1686BD;      /* Maersk mid-blue */
+    --blue:#42B0D5;       /* Maersk blue — primary accent */
+    --accent:#EA5D4B;     /* Maersk mid-red */
+    --accent-bg:#FFE9E7;  /* Maersk bright-red */
+    --green:#6CA926;      /* Maersk mid-green */
+    --green-bg:#E8F6D0;   /* Maersk bright-green */
+    --amber:#F3870C;      /* Maersk mid-orange */
+    --amber-bg:#FFF5DD;   /* Maersk bright-orange */
+    --info-bg:#E2F3FB;    /* Maersk bright-blue */
+    --bg:#F0F0F0;         /* Maersk bright-grey */
     --card:#ffffff;
-    --line:#e3e8ef;
-    --text:#1c2b3a;
-    --muted:#6b7c93;
+    --line:#D4D4D4;       /* Maersk light-grey */
+    --text:#141414;       /* Maersk black */
+    --muted:#6A6A6A;      /* Maersk mid-grey */
     --radius:10px;
   }
   *{box-sizing:border-box;}
-  body{margin:0;font-family:'Segoe UI',Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text);}
-  header{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;padding:22px 32px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
-  header h1{margin:0;font-size:20px;font-weight:600;letter-spacing:.3px;}
-  header p{margin:2px 0 0;font-size:12.5px;color:#b9c9de;}
-  .target-badge{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);padding:8px 16px;border-radius:20px;font-size:13px;display:flex;align-items:center;gap:8px;}
+  body{margin:0;font-family:'Maersk Text','Maersk Headline',Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text);}
+  header{background:var(--navy);color:#fff;padding:22px 32px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;border-bottom:3px solid var(--blue);}
+  header h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.3px;}
+  header p{margin:2px 0 0;font-size:12.5px;color:#A1D1E8;}
+  .target-badge{background:var(--blue);border:1px solid var(--blue);padding:8px 16px;border-radius:20px;font-size:13px;display:flex;align-items:center;gap:8px;}
   .target-badge input{width:50px;background:transparent;border:none;color:#fff;font-weight:700;font-size:14px;text-align:right;}
   main{max-width:1280px;margin:0 auto;padding:24px 20px 60px;}
 
-  #dropzone{border:2px dashed #b7c3d4;background:#fff;border-radius:var(--radius);padding:34px;text-align:center;color:var(--muted);cursor:pointer;transition:.15s;margin-bottom:22px;}
-  #dropzone.drag{border-color:var(--blue);background:#eef5fb;color:var(--blue);}
+  #dropzone{border:2px dashed var(--line);background:#fff;border-radius:var(--radius);padding:34px;text-align:center;color:var(--muted);cursor:pointer;transition:.15s;margin-bottom:22px;}
+  #dropzone.drag{border-color:var(--blue);background:var(--info-bg);color:var(--navy2);}
   #dropzone strong{color:var(--navy);}
   #fileInput{display:none;}
   #fileMeta{font-size:12.5px;margin-top:6px;color:var(--muted);}
@@ -59,6 +63,7 @@
   button.reset:hover{background:#e2e7ee;}
 
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:22px;}
+  .kpis-stacked{grid-template-columns:1fr;flex:0 0 260px;min-width:220px;margin-bottom:0;align-content:start;}
   .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;}
   .kpi .label{font-size:11.5px;text-transform:uppercase;color:var(--muted);letter-spacing:.5px;font-weight:600;}
   .kpi .value{font-size:28px;font-weight:700;color:var(--navy);margin-top:4px;}
@@ -71,13 +76,15 @@
   canvas{max-width:100%;}
 
   table{width:100%;border-collapse:collapse;font-size:13px;}
-  #catTable thead th{position:sticky;top:0;background:var(--card);z-index:1;}
+  #catTable thead th{position:sticky;top:0;background:var(--navy);z-index:1;}
   th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line);}
-  th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.4px;cursor:pointer;user-select:none;}
+  th{background:var(--navy);color:#fff;font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.4px;cursor:pointer;user-select:none;}
+  #catTable th{cursor:default;}
+  tr:nth-child(even) td{background:var(--bg);}
   tr:hover td{background:#f8fafc;}
   .pill{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:700;}
-  .pill-good{background:#e2f5f0;color:var(--green);}
-  .pill-bad{background:#fdeaea;color:var(--accent);}
+  .pill-good{background:var(--green-bg);color:var(--green);}
+  .pill-bad{background:var(--accent-bg);color:var(--accent);}
 
   details.settings{margin-bottom:20px;}
   details.settings summary{cursor:pointer;font-size:13px;color:var(--blue);font-weight:600;}
@@ -107,6 +114,7 @@
     <div id="fileMeta">Looking for shared team data… if none is found, upload your own file below.</div>
     <input type="file" id="fileInput" accept=".xlsx,.xls">
   </div>
+  <a href="#" id="changeDataLink" class="hidden" style="font-size:12.5px;color:var(--navy2);margin:-14px 0 20px;display:inline-block;">↻ Change data file</a>
 
   <div id="app" class="hidden">
 
@@ -129,20 +137,22 @@
 
     <div id="diagnostic"></div>
 
-    <div class="kpis" id="kpis"></div>
+    <div class="split-row">
+      <div class="kpis kpis-stacked" id="kpis"></div>
 
-    <div class="panel">
-      <h2>Breakdown by Assignment Group</h2>
-      <table id="groupTable">
-        <thead><tr>
-          <th data-key="group">Assignment Group</th>
-          <th data-key="resolved">Resolved</th>
-          <th data-key="met">Met SLA</th>
-          <th data-key="pct">SLA %</th>
-          <th data-key="status">Status</th>
-        </tr></thead>
-        <tbody></tbody>
-      </table>
+      <div class="panel" style="flex:1;margin-bottom:0;">
+        <h2>Breakdown by Assignment Group</h2>
+        <table id="groupTable">
+          <thead><tr>
+            <th data-key="group">Assignment Group</th>
+            <th data-key="resolved">Resolved</th>
+            <th data-key="met">Met SLA</th>
+            <th data-key="pct">SLA %</th>
+            <th data-key="status">Status</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
 
     <div class="split-row">
@@ -294,6 +304,8 @@ function handleArrayBuffer(arrayBuffer, sourceLabel){
     })).filter(r => r.opened && r.resolved && !isNaN(r.opened) && !isNaN(r.resolved));
     document.getElementById('fileMeta').textContent = sourceLabel + " — " + RAW.length + " rows loaded.";
     document.getElementById('app').classList.remove('hidden');
+    document.getElementById('dropzone').classList.add('hidden');
+    document.getElementById('changeDataLink').classList.remove('hidden');
     buildFilterOptions();
     render();
 }
@@ -314,8 +326,6 @@ async function tryAutoLoadSharedData(){
       if(resp.ok){
         const buf = await resp.arrayBuffer();
         handleArrayBuffer(buf, 'Shared data (' + url + ')');
-        document.getElementById('fileMeta').innerHTML += ' — <a href="#" id="uploadOwnLink">upload your own file instead</a>';
-        document.getElementById('uploadOwnLink').addEventListener('click', e=>{ e.preventDefault(); fileInput.click(); });
         return true;
       }
     }catch(e){ /* ignore, try next / fall back to dropzone */ }
@@ -323,6 +333,12 @@ async function tryAutoLoadSharedData(){
   return false;
 }
 tryAutoLoadSharedData();
+
+document.getElementById('changeDataLink').addEventListener('click', e=>{
+  e.preventDefault();
+  document.getElementById('dropzone').classList.remove('hidden');
+  document.getElementById('changeDataLink').classList.add('hidden');
+});
 
 
 function currentGroupList(){
@@ -386,8 +402,8 @@ function renderDiagnostic(){
   const uniqueYears = [...new Set(RAW.map(r=>r.resolved.getFullYear()))].sort();
 
   return `
-    <div class="panel" style="border-color:#f2545b;">
-      <h2 style="color:#f2545b;">⚠ No rows matched your filters — diagnostic</h2>
+    <div class="panel" style="border-color:var(--accent);">
+      <h2 style="color:var(--accent);">⚠ No rows matched your filters — diagnostic</h2>
       <p style="font-size:13px;color:var(--muted);margin-top:-6px;">
         Region filter ("${region}") matched <b>${regionMatches}</b> rows &nbsp;·&nbsp;
         Resolved year ${year} matched <b>${yearMatches}</b> rows &nbsp;·&nbsp;
@@ -447,7 +463,7 @@ function monthKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart
 
 function renderTrend(data, target){
   if(typeof Chart === 'undefined'){
-    document.getElementById('trendChart').outerHTML = '<p style="color:#f2545b;font-size:13px;">Chart library failed to load — check your internet connection and refresh the page.</p>';
+    document.getElementById('trendChart').outerHTML = '<p style="color:#EA5D4B;font-size:13px;">Chart library failed to load — check your internet connection and refresh the page.</p>';
     return;
   }
   const byMonth = {};
@@ -467,8 +483,8 @@ function renderTrend(data, target){
   trendChart = new Chart(document.getElementById('trendChart'), {
     type:'line',
     data:{ labels, datasets:[
-      { label:'SLA %', data: pcts, borderColor:'#1e6091', backgroundColor:'rgba(30,96,145,.1)', tension:.25, fill:true, pointRadius:3 },
-      { label:'Target', data: keys.map(()=>target), borderColor:'#e9a23b', borderDash:[6,4], pointRadius:0 }
+      { label:'SLA %', data: pcts, borderColor:'#42B0D5', backgroundColor:'rgba(66,176,213,.12)', tension:.25, fill:true, pointRadius:3 },
+      { label:'Target', data: keys.map(()=>target), borderColor:'#F3870C', borderDash:[6,4], pointRadius:0 }
     ]},
     options:{ responsive:true, scales:{ y:{ min:0, max:100, ticks:{callback:v=>v+'%'} } },
       plugins:{ legend:{position:'bottom'} } }
@@ -498,8 +514,8 @@ function renderWeekly(data){
   if(weeklyChart) weeklyChart.destroy();
   weeklyChart = new Chart(document.getElementById('weeklyChart'), {
     data:{ labels:keys, datasets:[
-      { type:'bar', label:'Resolved Volume', data: volumes, backgroundColor:'rgba(30,96,145,.35)', yAxisID:'y' },
-      { type:'line', label:'SLA %', data: pcts, borderColor:'#f2545b', yAxisID:'y1', tension:.25, pointRadius:2 }
+      { type:'bar', label:'Resolved Volume', data: volumes, backgroundColor:'rgba(66,176,213,.45)', yAxisID:'y' },
+      { type:'line', label:'SLA %', data: pcts, borderColor:'#EA5D4B', yAxisID:'y1', tension:.25, pointRadius:2 }
     ]},
     options:{ responsive:true,
       scales:{
@@ -579,7 +595,7 @@ function renderCatTable(data){
     return `<tr><td>${cat}</td>${rowCells}<td><strong>${catTotals[cat].toLocaleString()}</strong></td></tr>`;
   }).join('') || `<tr><td colspan="${cols.length+2}">No data for current filters.</td></tr>`;
 
-  const totalsRow = `<tr style="background:#f8fafc;font-weight:700;">
+  const totalsRow = `<tr style="background:var(--info-bg);font-weight:700;">
       <td>Total</td>
       ${cols.map(g => {
         const colTotal = cats.reduce((sum,cat)=> sum + (grid[cat][g] || 0), 0);

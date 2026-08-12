@@ -85,6 +85,8 @@
   .pill{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:700;}
   .pill-good{background:var(--green-bg);color:var(--green);}
   .pill-bad{background:var(--accent-bg);color:var(--accent);}
+  .sla-status-pill{cursor:pointer;}
+  .sla-status-pill:hover{opacity:.75;}
 
   details.settings{margin-bottom:20px;}
   details.settings summary{cursor:pointer;font-size:13px;color:var(--blue);font-weight:600;}
@@ -174,7 +176,7 @@
 
       <div class="panel" style="flex:1;margin-bottom:0;">
         <h2>Breakdown by Assignment Group</h2>
-        <p style="font-size:12px;color:var(--muted);margin:-8px 0 12px;">Click a row for that group's trend, top categories, and customer mix.</p>
+        <p style="font-size:12px;color:var(--muted);margin:-8px 0 12px;">Click a row for that group's trend, top categories, and customer mix. Click the status pill to jump straight to its breached tickets.</p>
         <table id="groupTable">
           <thead><tr>
             <th data-key="group">Assignment Group</th>
@@ -715,18 +717,27 @@ function renderTable(data, target){
   });
   const tbody = document.querySelector('#groupTable tbody');
   tbody.innerHTML = rows.map(r=>`
-    <tr class="clickable-row" data-group="${r.group}">
-      <td>${r.group}</td>
+    <tr class="clickable-row" data-group="${escapeHtml(r.group)}">
+      <td>${escapeHtml(r.group)}</td>
       <td>${r.resolved.toLocaleString()}</td>
       <td>${r.met.toLocaleString()}</td>
       <td>${r.pct.toFixed(1)}%</td>
-      <td><span class="pill ${r.status==='On Target'?'pill-good':'pill-bad'}">${r.status}</span></td>
+      <td><span class="pill sla-status-pill ${r.status==='On Target'?'pill-good':'pill-bad'}">${r.status}</span></td>
     </tr>
   `).join('') || '<tr><td colspan="5">No data for current filters.</td></tr>';
   tbody.querySelectorAll('tr[data-group]').forEach(tr=>{
+    const group = tr.dataset.group;
     tr.addEventListener('click', ()=>{
-      openGroupDetail(tr.dataset.group);
+      openGroupDetail(group);
     });
+    const pill = tr.querySelector('.sla-status-pill');
+    if(pill){
+      pill.addEventListener('click', e=>{
+        e.stopPropagation();
+        const rows = lastFilteredData.filter(r=>r.assignmentGroup===group);
+        openTicketModal(rows, group, {onlyBreached:true});
+      });
+    }
   });
 }
 

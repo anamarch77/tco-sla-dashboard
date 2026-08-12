@@ -43,6 +43,16 @@
   .filter-group{display:flex;flex-direction:column;gap:6px;width:100%;}
   .filter-group label{font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;}
   select[multiple]{border:1px solid var(--line);border-radius:6px;padding:6px;font-size:13px;background:#fbfcfd;width:100%;}
+
+  .dropdown-check{position:relative;width:100%;}
+  .dropdown-check-btn{width:100%;text-align:left;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:13px;background:#fbfcfd;color:var(--text);cursor:pointer;}
+  .dropdown-check-btn:hover{background:#f2f4f7;}
+  .dropdown-check-panel{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:20;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(11,37,69,.12);max-height:260px;overflow-y:auto;padding:6px 0;}
+  .dropdown-check-panel.hidden{display:none;}
+  .dropdown-check-panel label{display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:13px;cursor:pointer;}
+  .dropdown-check-panel label:hover{background:#f5f7fa;}
+  .dropdown-check-panel input[type="checkbox"]{margin:0;}
+  .dropdown-check-panel label.all-option{border-bottom:1px solid var(--line);font-weight:600;margin-bottom:2px;}
   select.single{border:1px solid var(--line);border-radius:6px;padding:8px;font-size:13px;background:#fbfcfd;width:100%;}
   .hint{font-size:11px;color:var(--muted);margin-top:2px;}
   button.reset{background:#eef1f5;border:1px solid var(--line);border-radius:6px;padding:9px 14px;font-size:13px;color:var(--navy);cursor:pointer;height:fit-content;width:100%;}
@@ -139,13 +149,17 @@
       <div class="filters">
         <div class="filter-group">
           <label>Customer</label>
-          <select id="customerFilter" multiple size="5"></select>
-          <div class="hint">Ctrl/Cmd-click to select multiple. "All" clears other picks.</div>
+          <div class="dropdown-check" id="customerFilterDD">
+            <button type="button" class="dropdown-check-btn">All Customers ▾</button>
+            <div class="dropdown-check-panel hidden"></div>
+          </div>
         </div>
         <div class="filter-group">
           <label>Assignment Group</label>
-          <select id="groupFilter" multiple size="5"></select>
-          <div class="hint">Ctrl/Cmd-click to select multiple. "All" clears other picks.</div>
+          <div class="dropdown-check" id="groupFilterDD">
+            <button type="button" class="dropdown-check-btn">All Assignment Groups ▾</button>
+            <div class="dropdown-check-panel hidden"></div>
+          </div>
         </div>
         <div class="filter-group">
           <label>Month</label>
@@ -173,13 +187,17 @@
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin:14px 0;">
         <div class="filter-group" style="flex:1;min-width:220px;">
           <label>Filter Op. Category 2</label>
-          <select id="catFilterCategory" multiple size="4"></select>
-          <div class="hint">Ctrl/Cmd-click to select multiple. "All" clears other picks.</div>
+          <div class="dropdown-check" id="catFilterCategoryDD">
+            <button type="button" class="dropdown-check-btn">All Categories ▾</button>
+            <div class="dropdown-check-panel hidden"></div>
+          </div>
         </div>
         <div class="filter-group" style="flex:1;min-width:220px;">
           <label>Filter Assignment Group (this table only)</label>
-          <select id="catFilterGroup" multiple size="4"></select>
-          <div class="hint">Ctrl/Cmd-click to select multiple. "All" clears other picks.</div>
+          <div class="dropdown-check" id="catFilterGroupDD">
+            <button type="button" class="dropdown-check-btn">All Assignment Groups ▾</button>
+            <div class="dropdown-check-panel hidden"></div>
+          </div>
         </div>
         <button class="reset" id="resetCatFilters" style="width:auto;align-self:flex-start;margin-top:22px;">Reset table filters</button>
       </div>
@@ -327,15 +345,8 @@ function buildFilterOptions(){
   const customers = [...new Set(data.map(r=>r.customer).filter(Boolean))].sort();
   const groups = [...new Set(data.map(r=>r.assignmentGroup).filter(Boolean))].sort();
 
-  const cSel = document.getElementById('customerFilter');
-  const prevC = selected('customerFilter');
-  cSel.innerHTML = '<option value="">All Customers</option>' + customers.map(c=>`<option value="${c}">${c}</option>`).join('');
-  restoreSelection(cSel, prevC, customers);
-
-  const gSel = document.getElementById('groupFilter');
-  const prevG = selected('groupFilter');
-  gSel.innerHTML = '<option value="">All Assignment Groups</option>' + groups.map(g=>`<option value="${g}">${g}</option>`).join('');
-  restoreSelection(gSel, prevG, groups);
+  renderCheckDropdown('customerFilterDD', customers, 'All Customers');
+  renderCheckDropdown('groupFilterDD', groups, 'All Assignment Groups');
 
   const mSel = document.getElementById('monthFilter');
   mSel.innerHTML = '<option value="">All months</option>' +
@@ -343,46 +354,9 @@ function buildFilterOptions(){
     .map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
 }
 
-function restoreSelection(sel, prevValues, validValues){
-  const keep = prevValues.filter(v => v==='' || validValues.includes(v));
-  if(keep.length===0){
-    sel.options[0].selected = true; // default to "All"
-  } else {
-    [...sel.options].forEach(o => { o.selected = keep.includes(o.value); });
-  }
-}
-
-function selected(id){
-  return [...document.getElementById(id).selectedOptions].map(o=>o.value);
-}
-
-// "All" is mutually exclusive with specific picks: selecting "All" clears others, selecting a specific one clears "All".
-function wireExclusiveAll(id){
-  const sel = document.getElementById(id);
-  sel.addEventListener('mousedown', e=>{
-    if(e.target.tagName !== 'OPTION') return;
-    const isAll = e.target.value === '';
-    e.preventDefault();
-    if(isAll){
-      [...sel.options].forEach(o => o.selected = (o.value===''));
-    } else {
-      const allOpt = sel.options[0];
-      const wasSelected = e.target.selected;
-      if(e.ctrlKey || e.metaKey || e.shiftKey){
-        e.target.selected = !wasSelected;
-      } else {
-        [...sel.options].forEach(o => o.selected = false);
-        e.target.selected = true;
-      }
-      allOpt.selected = [...sel.options].slice(1).every(o=>!o.selected);
-    }
-    sel.dispatchEvent(new Event('change'));
-  });
-}
-
 function applyUiFilters(data){
-  const custs = selected('customerFilter').filter(v=>v!=='');
-  const grps = selected('groupFilter').filter(v=>v!=='');
+  const custs = getCheckedValues('customerFilterDD');
+  const grps = getCheckedValues('groupFilterDD');
   const month = document.getElementById('monthFilter').value;
   return data.filter(r=>
     (custs.length===0 || custs.includes(r.customer)) &&
@@ -571,8 +545,8 @@ function renderCatTable(data){
   lastFilteredData = data;
   buildCatTableFilterOptions(data);
 
-  const catPicks = selected('catFilterCategory').filter(v=>v!=='');
-  const grpPicks = selected('catFilterGroup').filter(v=>v!=='');
+  const catPicks = getCheckedValues('catFilterCategoryDD');
+  const grpPicks = getCheckedValues('catFilterGroupDD');
   const localData = data.filter(r =>
     (catPicks.length===0 || catPicks.includes(r.opCat2 || '(blank)')) &&
     (grpPicks.length===0 || grpPicks.includes(r.assignmentGroup))
@@ -620,17 +594,64 @@ function renderCatTable(data){
 function buildCatTableFilterOptions(data){
   const cats = [...new Set(data.map(r => r.opCat2 || '(blank)'))].sort();
   const groups = currentGroupList().filter(g => data.some(r => r.assignmentGroup === g));
-
-  const catSel = document.getElementById('catFilterCategory');
-  const prevCat = selected('catFilterCategory');
-  catSel.innerHTML = '<option value="">All Categories</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join('');
-  restoreSelection(catSel, prevCat, cats);
-
-  const grpSel = document.getElementById('catFilterGroup');
-  const prevGrp = selected('catFilterGroup');
-  grpSel.innerHTML = '<option value="">All Assignment Groups</option>' + groups.map(g=>`<option value="${g}">${g}</option>`).join('');
-  restoreSelection(grpSel, prevGrp, groups);
+  renderCheckDropdown('catFilterCategoryDD', cats, 'All Categories');
+  renderCheckDropdown('catFilterGroupDD', groups, 'All Assignment Groups');
 }
+
+// ---- generic checkbox dropdown component ----
+function renderCheckDropdown(rootId, items, allLabel){
+  const root = document.getElementById(rootId);
+  const panel = root.querySelector('.dropdown-check-panel');
+  const prevChecked = getCheckedValues(rootId);
+  panel.innerHTML = `
+    <label class="all-option"><input type="checkbox" value="" ${prevChecked.length===0 ? 'checked':''}> ${allLabel}</label>
+    ${items.map(v=>`<label><input type="checkbox" value="${v}" ${prevChecked.includes(v) ? 'checked':''}> ${v}</label>`).join('')}
+  `;
+  updateDropdownLabel(rootId, allLabel);
+  panel.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      const allBox = panel.querySelector('input[value=""]');
+      if(cb.value===''){
+        if(cb.checked){
+          panel.querySelectorAll('input[type="checkbox"]').forEach(o=>{ if(o!==cb) o.checked=false; });
+        } else if(![...panel.querySelectorAll('input[type="checkbox"]')].some(o=>o!==cb && o.checked)){
+          cb.checked = true; // don't allow deselecting All with nothing else picked
+        }
+      } else {
+        if(cb.checked){ allBox.checked = false; }
+        else if(![...panel.querySelectorAll('input[type="checkbox"]')].some(o=>o.value!=='' && o.checked)){
+          allBox.checked = true;
+        }
+      }
+      updateDropdownLabel(rootId, allLabel);
+      root.dispatchEvent(new Event('cdchange'));
+    });
+  });
+}
+function getCheckedValues(rootId){
+  const root = document.getElementById(rootId);
+  if(!root) return [];
+  return [...root.querySelectorAll('input[type="checkbox"]:checked')].map(cb=>cb.value).filter(v=>v!=='');
+}
+function updateDropdownLabel(rootId, allLabel){
+  const root = document.getElementById(rootId);
+  const btn = root.querySelector('.dropdown-check-btn');
+  const vals = getCheckedValues(rootId);
+  btn.textContent = (vals.length===0 ? allLabel : vals.length===1 ? vals[0] : vals.length + ' selected') + ' ▾';
+}
+document.querySelectorAll('.dropdown-check-btn').forEach(btn=>{
+  btn.addEventListener('click', e=>{
+    e.stopPropagation();
+    const panel = btn.nextElementSibling;
+    document.querySelectorAll('.dropdown-check-panel').forEach(p=>{ if(p!==panel) p.classList.add('hidden'); });
+    panel.classList.toggle('hidden');
+  });
+});
+document.addEventListener('click', e=>{
+  document.querySelectorAll('.dropdown-check').forEach(root=>{
+    if(!root.contains(e.target)) root.querySelector('.dropdown-check-panel').classList.add('hidden');
+  });
+});
 
 document.querySelectorAll('#groupTable th').forEach(th=>{
   th.addEventListener('click', ()=>{
@@ -641,23 +662,23 @@ document.querySelectorAll('#groupTable th').forEach(th=>{
   });
 });
 
-['customerFilter','groupFilter','monthFilter','targetPct'].forEach(id=>{
+['monthFilter','targetPct'].forEach(id=>{
   document.getElementById(id).addEventListener('change', render);
 });
-wireExclusiveAll('customerFilter');
-wireExclusiveAll('groupFilter');
-wireExclusiveAll('catFilterCategory');
-wireExclusiveAll('catFilterGroup');
-document.getElementById('catFilterCategory').addEventListener('change', ()=>renderCatTable(lastFilteredData));
-document.getElementById('catFilterGroup').addEventListener('change', ()=>renderCatTable(lastFilteredData));
+document.getElementById('customerFilterDD').addEventListener('cdchange', render);
+document.getElementById('groupFilterDD').addEventListener('cdchange', render);
+document.getElementById('catFilterCategoryDD').addEventListener('cdchange', ()=>renderCatTable(lastFilteredData));
+document.getElementById('catFilterGroupDD').addEventListener('cdchange', ()=>renderCatTable(lastFilteredData));
 document.getElementById('resetCatFilters').addEventListener('click', ()=>{
-  [...document.getElementById('catFilterCategory').options].forEach(o => o.selected = (o.value===''));
-  [...document.getElementById('catFilterGroup').options].forEach(o => o.selected = (o.value===''));
+  ['catFilterCategoryDD','catFilterGroupDD'].forEach(id=>{
+    document.querySelectorAll(`#${id} input[type="checkbox"]`).forEach(cb=>{ cb.checked = (cb.value===''); });
+  });
   renderCatTable(lastFilteredData);
 });
 document.getElementById('resetFilters').addEventListener('click', ()=>{
-  [...document.getElementById('customerFilter').options].forEach(o => o.selected = (o.value===''));
-  [...document.getElementById('groupFilter').options].forEach(o => o.selected = (o.value===''));
+  ['customerFilterDD','groupFilterDD'].forEach(id=>{
+    document.querySelectorAll(`#${id} input[type="checkbox"]`).forEach(cb=>{ cb.checked = (cb.value===''); });
+  });
   document.getElementById('monthFilter').value = '';
   render();
 });

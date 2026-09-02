@@ -215,6 +215,18 @@
     </div>
 
     <div class="panel">
+      <h2>SLA % by Hop Count</h2>
+      <p style="font-size:12.5px;color:var(--muted);margin-top:-8px;">Hops = number of reassignments before resolution. Click a row to see the tickets in that bucket, sorted by hop count.</p>
+      <canvas id="hopsChart" height="80" style="margin-bottom:16px;"></canvas>
+      <table id="hopsTable">
+        <thead><tr>
+          <th>Hops</th><th>Resolved</th><th>Met SLA</th><th>SLA %</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
       <h2>Op. Category 2 by Assignment Group</h2>
       <p style="font-size:12.5px;color:var(--muted);margin-top:-8px;">Counts all resolved incidents regardless of SLA status. Respects the Month filter above — set it to a specific month to slice by month, or leave on "All months" for the full year. Click any cell to see the tickets behind it.</p>
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin:14px 0;">
@@ -263,7 +275,7 @@ const DEFAULT_GROUPS = [
 document.getElementById('groupList').value = DEFAULT_GROUPS.join("\n");
 
 let RAW = [];
-let trendChart, weeklyChart;
+let trendChart, weeklyChart, hopsChart;
 let sortState = {key:'pct', dir:'asc'};
 
 // ---- robust Excel/JS date parsing ----
@@ -323,9 +335,16 @@ function openTicketModal(rows, scopeLabel, opts){
     const overage = slaHours(r.opened, r.resolved) - 144;
     return {...r, overage, breached: overage >= 0};
   });
-  list = onlyBreached
-    ? list.filter(r=>r.breached).sort((a,b)=>b.overage-a.overage)
-    : list.sort((a,b)=>b.resolved-a.resolved);
+  if(opts.sortBy === 'hops'){
+    list.sort((a,b)=> (b.hops||0) - (a.hops||0));
+  } else if(onlyBreached){
+    list = list.filter(r=>r.breached).sort((a,b)=>b.overage-a.overage);
+  } else {
+    list.sort((a,b)=>b.resolved-a.resolved);
+  }
+  if(opts.sortBy === 'hops' && onlyBreached){
+    list = list.filter(r=>r.breached);
+  }
 
   const label = onlyBreached ? 'Breached tickets' : 'All tickets';
   document.getElementById('drillTitle').textContent = `${label} — ${scopeLabel} (${list.length.toLocaleString()})`;
@@ -333,7 +352,7 @@ function openTicketModal(rows, scopeLabel, opts){
   const fmt = d => d.toLocaleDateString(undefined, {year:'numeric',month:'short',day:'numeric'});
   const thead = `<thead><tr>
       <th>Incident</th><th>Customer</th><th>Assignment Group</th><th>Op. Category 2</th>
-      <th>Opened</th><th>Resolved</th><th>${onlyBreached ? 'Business Hrs Over SLA' : 'SLA Status'}</th>
+      <th>Opened</th><th>Resolved</th><th>Hops</th><th>${onlyBreached ? 'Business Hrs Over SLA' : 'SLA Status'}</th>
     </tr></thead>`;
   const tbody = list.map(r => `
     <tr>
@@ -343,11 +362,12 @@ function openTicketModal(rows, scopeLabel, opts){
       <td>${escapeHtml(r.opCat2)}</td>
       <td>${fmt(r.opened)}</td>
       <td>${fmt(r.resolved)}</td>
+      <td>${r.hops ?? 0}</td>
       <td>${onlyBreached
         ? `<strong>+${r.overage}</strong>`
         : `<span class="pill ${r.breached?'pill-bad':'pill-good'}">${r.breached ? 'Breached (+'+r.overage+'h)' : 'Met SLA'}</span>`}</td>
     </tr>
-  `).join('') || `<tr><td colspan="7">No tickets for this selection.</td></tr>`;
+  `).join('') || `<tr><td colspan="8">No tickets for this selection.</td></tr>`;
 
   document.getElementById('drillBody').innerHTML = `<table>${thead}<tbody>${tbody}</tbody></table>`;
   document.getElementById('drillModal').classList.remove('hidden');
@@ -459,6 +479,7 @@ function handleArrayBuffer(arrayBuffer, sourceLabel){
       assignmentGroup: r['Assignment Group'],
       customer: r['Customer'],
       opCat2: r['Op. Category 2'],
+      hops: Number(r['#Hops']) || 0,
       opened: parseDateValue(r['Opened']),
       resolved: parseDateValue(r['Resolved']),
     })).filter(r => r.opened && r.resolved && !isNaN(r.opened) && !isNaN(r.resolved));
@@ -618,6 +639,7 @@ function render(){
 
   renderTrend(data, target);
   renderWeekly(data);
+  renderHopsPanel(data);
   renderTable(data, target);
   renderCatTable(data);
 }
@@ -698,6 +720,59 @@ function renderWeekly(data){
     }
   });
 }
+
+function hopsBucket(hops){
+  return hops >= 3 ? '3+' : String(hops);
+}
+
+function renderHopsPanel(data){
+  const buckets = ['0','1','2','3+'];
+  const byBucket = {};
+  buckets.forEach(b=>byBucket[b]=[]);
+  data.forEach(r=>{
+    const b = hopsBucket(r.hops);
+    if(!byBucket[b]) byBucket[b] = [];
+    byBucket[b].push(r);
+  });
+
+  const target = parseFloat(document.getElementById('targetPct').value) || 97;
+  const stats = buckets.map(b => ({ bucket:b, ...computeSLA(byBucket[b]) }));
+
+  if(hopsChart) hopsChart.destroy();
+  if(typeof Chart !== 'undefined'){
+    hopsChart = new Chart(document.getElementById('hopsChart'), {
+      data:{ labels: buckets.map(b=>b+' hop'+(b==='1'?'':'s')), datasets:[
+        { type:'bar', label:'Resolved Volume', data: stats.map(s=>s.total), backgroundColor:'rgba(66,176,213,.45)', yAxisID:'y' },
+        { type:'line', label:'SLA %', data: stats.map(s=>s.pct), borderColor:'#EA5D4B', yAxisID:'y1', tension:.25, pointRadius:3 },
+        { type:'line', label:'Target', data: buckets.map(()=>target), borderColor:'#F3870C', borderDash:[6,4], pointRadius:0, yAxisID:'y1' }
+      ]},
+      options:{ responsive:true,
+        scales:{
+          y:{ position:'left', title:{display:true,text:'Resolved'} },
+          y1:{ position:'right', min:0, max:100, grid:{drawOnChartArea:false}, ticks:{callback:v=>v+'%'}, title:{display:true,text:'SLA %'} }
+        },
+        plugins:{ legend:{position:'bottom'} }
+      }
+    });
+  }
+
+  const tbody = stats.map(s => `
+    <tr class="clickable-row" data-bucket="${s.bucket}">
+      <td>${s.bucket} hop${s.bucket==='1'?'':'s'}</td>
+      <td>${s.total.toLocaleString()}</td>
+      <td>${s.met.toLocaleString()}</td>
+      <td>${s.pct.toFixed(1)}%</td>
+    </tr>
+  `).join('');
+  document.querySelector('#hopsTable tbody').innerHTML = tbody;
+  document.querySelectorAll('#hopsTable tr[data-bucket]').forEach(tr=>{
+    tr.addEventListener('click', ()=>{
+      const b = tr.dataset.bucket;
+      openTicketModal(byBucket[b], `${b} hop${b==='1'?'':'s'}`, {onlyBreached:false, sortBy:'hops'});
+    });
+  });
+}
+
 
 function renderTable(data, target){
   const byGroup = {};

@@ -301,25 +301,24 @@ function parseDateValue(v){
   return null;
 }
 
-// ---- business-day (NETWORKDAYS-equivalent) calculation ----
-function networkDays(start, end){
-  let d1 = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  let d2 = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-  let sign = 1;
-  if(d1 > d2){ const t=d1; d1=d2; d2=t; sign=-1; }
-  const oneDay = 86400000;
-  const totalDays = Math.round((d2 - d1)/oneDay) + 1;
-  const weeks = Math.floor(totalDays/7);
-  let days = weeks*5;
-  const remainder = totalDays % 7;
-  const dow = d1.getDay();
-  for(let i=0;i<remainder;i++){
-    const day = (dow+i) % 7;
-    if(day !== 0 && day !== 6) days++;
-  }
-  return days*sign;
+// ---- SLA clock: real elapsed business hours (Sat/Sun time removed), SLA met when <= 144 ----
+const SLA_LIMIT_HOURS = 144;
+const DAY_MS = 86400000;
+// Use wall-clock components as UTC so daylight-saving shifts can't add/remove an hour.
+function wallMs(d){ return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds()); }
+// Cumulative weekday milliseconds since a fixed Monday (1970-01-05 00:00).
+function cumBusinessMs(t){
+  const days = Math.floor(t / DAY_MS);
+  const frac = t - days * DAY_MS;
+  const m = days - 4;                      // days since Monday 1970-01-05
+  const weeks = Math.floor(m / 7);
+  const dow = m - weeks * 7;               // 0=Mon ... 6=Sun
+  return weeks * 5 * DAY_MS + Math.min(dow, 5) * DAY_MS + (dow < 5 ? frac : 0);
 }
-function slaHours(opened, resolved){ return networkDays(opened, resolved) * 24; }
+function slaHours(opened, resolved){
+  return (cumBusinessMs(wallMs(resolved)) - cumBusinessMs(wallMs(opened))) / 3600000;
+}
+function slaMet(opened, resolved){ return slaHours(opened, resolved) <= SLA_LIMIT_HOURS; }
 
 function escapeHtml(s){
   if(s===null || s===undefined) return '';
@@ -332,8 +331,10 @@ function openTicketModal(rows, scopeLabel, opts){
   const onlyBreached = opts.onlyBreached !== false;
 
   let list = rows.map(r => {
-    const overage = slaHours(r.opened, r.resolved) - 144;
-    return {...r, overage, breached: overage >= 0};
+    const rawOver = slaHours(r.opened, r.resolved) - SLA_LIMIT_HOURS;
+    const breached = rawOver > 0;
+    const overage = breached ? Math.ceil(rawOver * 10) / 10 : 0;
+    return {...r, overage, breached};
   });
   if(opts.sortBy === 'hops'){
     list.sort((a,b)=> (b.hops||0) - (a.hops||0));
@@ -352,7 +353,7 @@ function openTicketModal(rows, scopeLabel, opts){
   const fmt = d => d.toLocaleDateString(undefined, {year:'numeric',month:'short',day:'numeric'});
   const thead = `<thead><tr>
       <th>Incident</th><th>Customer</th><th>Assignment Group</th><th>Op. Category 2</th>
-      <th>Opened</th><th>Resolved</th><th>Hops</th><th>${onlyBreached ? 'Business Hrs Over SLA' : 'SLA Status'}</th>
+      <th>Opened</th><th>Resolved</th><th>Hops</th><th>${onlyBreached ? 'Business Hrs Over 144' : 'SLA Status'}</th>
     </tr></thead>`;
   const tbody = list.map(r => `
     <tr>
@@ -564,7 +565,7 @@ function applyUiFilters(data){
 
 function computeSLA(rows){
   let met=0;
-  rows.forEach(r => { if(slaHours(r.opened, r.resolved) < 144) met++; });
+  rows.forEach(r => { if(slaMet(r.opened, r.resolved)) met++; });
   return {total: rows.length, met, pct: rows.length ? met/rows.length*100 : 0};
 }
 
@@ -630,7 +631,7 @@ function render(){
   const statusClass = overall.pct >= target ? 'status-good' : 'status-bad';
   kpis.innerHTML = `
     <div class="kpi"><div class="label">Resolved Incidents</div><div class="value">${overall.total.toLocaleString()}</div><div class="sub">NAM · 2026 · filtered view</div></div>
-    <div class="kpi clickable" id="kpiMetSla"><div class="label">Met SLA (&lt;144 bh)</div><div class="value">${overall.met.toLocaleString()}</div><div class="sub">${(overall.total-overall.met).toLocaleString()} breached — click to view</div></div>
+    <div class="kpi clickable" id="kpiMetSla"><div class="label">Met SLA (≤144 bh)</div><div class="value">${overall.met.toLocaleString()}</div><div class="sub">${(overall.total-overall.met).toLocaleString()} breached — click to view</div></div>
     <div class="kpi ${statusClass} clickable" id="kpiSlaPct"><div class="label">SLA %</div><div class="value">${overall.pct.toFixed(1)}%</div><div class="sub">Target ${target}% — ${(overall.pct-target>=0?'+':'')+(overall.pct-target).toFixed(1)} pts · click to view breaches</div></div>
     <div class="kpi"><div class="label">Assignment Groups</div><div class="value">${new Set(data.map(r=>r.assignmentGroup)).size}</div><div class="sub">of ${currentGroupList().length} configured</div></div>
   `;
